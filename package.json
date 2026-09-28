@@ -1,0 +1,31 @@
+{
+  "name": "school-bazaar-pos",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Online multi-device POS for a school event with Bazaar and Snacks sections (React + Vite + Supabase).",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run tests/unit",
+    "test:db": "vitest run tests/db",
+    "test:all": "vitest run",
+    "db:bundle": "node scripts/bundle-sql.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.117.2",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-router-dom": "^7.9.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^5.0.0",
+    "pg": "^8.16.0",
+    "vite": "^7.1.0",
+    "vitest": "^5.0.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
