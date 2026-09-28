@@ -1,0 +1,18 @@
+/* Printing: ONLY the receipt is printed (rendered into .print-area by
+   <PrintArea>). The whole app (#root) and any open dialog are hidden, so
+   "Print / Save PDF" produces a clean receipt on paper or as a PDF. */
+@media print {
+  @page { margin: 8mm; }
+  html, body { height: auto !important; background: #fff !important; }
+  #root, .modal-bg, .toasts { display: none !important; }
+  .print-area { display: block !important; }
+  .print-area .receipt {
+    max-width: 80mm;
+    margin: 0 auto;
+    border: 0;
+    padding: 0;
+    font-size: 12px;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

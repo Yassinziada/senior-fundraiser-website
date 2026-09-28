@@ -491,6 +491,48 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_auth_user();
 
+-- Supabase Auth's admin "create user" first INSERTS the user and then UPDATES
+-- raw_app_meta_data with the app_metadata we passed. So the pos_* keys usually
+-- arrive in an UPDATE; apply them when they change. (Normal sign-ins rewrite
+-- provider info but never change pos_* values, so this is a no-op for them.)
+create or replace function public.handle_auth_user_meta_update()
+returns trigger language plpgsql security definer set search_path = '' as $$
+declare
+  v_new     jsonb := coalesce(new.raw_app_meta_data, '{}'::jsonb);
+  v_old     jsonb := coalesce(old.raw_app_meta_data, '{}'::jsonb);
+  v_role    public.app_role;
+  v_section text;
+  v_user    text;
+begin
+  if v_new ->> 'pos_role' not in ('admin', 'cashier') then return new; end if;
+  if (v_new ->> 'pos_role', v_new ->> 'pos_section', v_new ->> 'pos_username', v_new ->> 'pos_full_name')
+     is not distinct from
+     (v_old ->> 'pos_role', v_old ->> 'pos_section', v_old ->> 'pos_username', v_old ->> 'pos_full_name') then
+    return new;
+  end if;
+  v_role := (v_new ->> 'pos_role')::public.app_role;
+  v_section := case when v_role = 'cashier' then nullif(v_new ->> 'pos_section', '') end;
+  if v_role = 'cashier' and not exists (select 1 from public.sections s where s.code = v_section) then
+    return new;
+  end if;
+  v_user := lower(nullif(v_new ->> 'pos_username', ''));
+  update public.profiles p
+     set role = v_role,
+         section_code = v_section,
+         active = true,
+         full_name = left(coalesce(nullif(v_new ->> 'pos_full_name', ''), p.full_name), 80),
+         username = case
+           when v_user ~ '^[a-z0-9._-]{2,40}$'
+                and not exists (select 1 from public.profiles x where x.username = v_user and x.id <> p.id)
+           then v_user else p.username end
+   where p.id = new.id;
+  return new;
+end $$;
+
+create trigger on_auth_user_meta_updated
+  after update of raw_app_meta_data on auth.users
+  for each row execute function public.handle_auth_user_meta_update();
+
 -- =============================================================================
 -- Row Level Security
 -- (select public.is_admin()) is wrapped in a sub-select so Postgres evaluates

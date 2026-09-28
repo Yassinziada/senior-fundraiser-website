@@ -46,8 +46,9 @@ export async function createTestDatabase() {
   return pool;
 }
 
-/** Simulates the admin-users Edge Function (service role sets app_metadata). */
-export async function createUser(pool, { email, role, section, username, fullName, rawMeta }) {
+/** Simulates the admin-users Edge Function (service role sets app_metadata).
+ *  Pass { oneStep: true } to insert the metadata directly (older Auth versions). */
+export async function createUser(pool, { email, role, section, username, fullName, rawMeta, oneStep = false }) {
   const meta = rawMeta ?? {
     provider: 'email',
     pos_role: role,
@@ -55,10 +56,19 @@ export async function createUser(pool, { email, role, section, username, fullNam
     pos_username: username,
     pos_full_name: fullName ?? username,
   };
+  if (oneStep) {
+    const r = await pool.query('insert into auth.users (email, raw_app_meta_data) values ($1, $2) returning id', [email, meta]);
+    return r.rows[0].id;
+  }
+  // Mimic Supabase Auth's admin createUser: INSERT with provider info only,
+  // then UPDATE raw_app_meta_data with the app_metadata we passed.
   const { rows } = await pool.query('insert into auth.users (email, raw_app_meta_data) values ($1, $2) returning id', [
     email,
-    meta,
+    { provider: 'email', providers: ['email'] },
   ]);
+  if (meta.pos_role) {
+    await pool.query(`update auth.users set raw_app_meta_data = raw_app_meta_data || $2 where id = $1`, [rows[0].id, meta]);
+  }
   return rows[0].id;
 }
 

@@ -39,7 +39,7 @@ d('School Bazaar POS database', () => {
     admin = await createUser(pool, { email: 'admin@test.local', role: 'admin', username: 'admin', fullName: 'Admin' });
     bazaar = await createUser(pool, { email: 'bazaar@test.local', role: 'cashier', section: 'BAZAAR', username: 'bazaar' });
     snacks = await createUser(pool, { email: 'snacks@test.local', role: 'cashier', section: 'SNACKS', username: 'snacks' });
-    bazaar2 = await createUser(pool, { email: 'bazaar2@test.local', role: 'cashier', section: 'BAZAAR', username: 'bazaar2' });
+    bazaar2 = await createUser(pool, { email: 'bazaar2@test.local', role: 'cashier', section: 'BAZAAR', username: 'bazaar2', oneStep: true });
     // a user created in the Supabase dashboard (no pos_* metadata)
     pending = await createUser(pool, { email: 'stranger@test.local', rawMeta: { provider: 'email' } });
     const rows = await as(pool, admin, 'select id, name, section_code, price, stock from products');
@@ -59,6 +59,17 @@ d('School Bazaar POS database', () => {
       expect(by.bazaar).toMatchObject({ role: 'cashier', section_code: 'BAZAAR', active: true });
       expect(by.snacks).toMatchObject({ role: 'cashier', section_code: 'SNACKS', active: true });
       expect(by.stranger).toMatchObject({ active: false });
+    });
+
+    it('profile picks up role/section whether Auth writes metadata on insert or in a later update', async () => {
+      const { rows } = await pool.query(`select username, full_name, active, section_code from profiles where id = any($1)`, [[bazaar, bazaar2]]);
+      expect(rows.every((r) => r.active && r.section_code === 'BAZAAR')).toBe(true);
+      // a later sign-in rewrites provider info but must not change anything
+      await pool.query(`update profiles set section_code = 'SNACKS' where id = $1`, [bazaar2]);
+      await pool.query(`update auth.users set raw_app_meta_data = raw_app_meta_data || '{"providers":["email"]}' where id = $1`, [bazaar2]);
+      const { rows: r2 } = await pool.query('select section_code from profiles where id = $1', [bazaar2]);
+      expect(r2[0].section_code).toBe('SNACKS');
+      await pool.query(`update profiles set section_code = 'BAZAAR' where id = $1`, [bazaar2]);
     });
 
     it('a user can read only their own profile (cashier cannot list other accounts)', async () => {
