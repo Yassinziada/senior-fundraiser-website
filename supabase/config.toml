@@ -417,7 +417,9 @@ enabled = true
 # and column/key alignment. Set to "null" to emit raw, unformatted SQL.
 # format_options = "{\"keywordCase\":\"upper\",\"indent\":2,\"maxWidth\":180,\"commaStyle\":\"trailing\"}"
 
-# School Bazaar POS: the admin-users function verifies the caller's JWT itself
-# (and that the caller is an active admin) before doing anything.
+# School Bazaar POS: the admin-users function verifies the caller's session
+# itself (with Supabase Auth) and checks the caller is an ACTIVE ADMIN before
+# doing anything. Gateway JWT verification is off so the function works with
+# both the legacy and the new (publishable/secret, asymmetric JWT) API keys.
 [functions.admin-users]
-verify_jwt = true
+verify_jwt = false

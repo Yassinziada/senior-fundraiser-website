@@ -11,6 +11,10 @@
 //   { action: "create_user", username, full_name, pin, role: "cashier"|"admin", section?, email }
 //   { action: "reset_credentials", user_id, pin }
 //
+// Security: deployed with gateway JWT verification OFF (--no-verify-jwt) so it
+// works with every Supabase key type; the function itself validates the
+// caller's session with Supabase Auth and requires an ACTIVE ADMIN profile.
+//
 // Deploy: see README ("Deploy the admin-users function").
 //
 // No external imports: it talks to Supabase's Auth and REST APIs with plain
@@ -46,7 +50,10 @@ Deno.serve(async (req) => {
   if (req.method !== 'POST') return json(405, { error: 'Method not allowed' });
 
   const url = Deno.env.get('SUPABASE_URL');
-  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  // SUPABASE_SERVICE_ROLE_KEY is provided automatically. Projects that have
+  // disabled legacy API keys can instead add a secret called POS_SERVICE_KEY
+  // (Edge Functions -> Secrets) containing a "sb_secret_..." key.
+  const serviceKey = Deno.env.get('POS_SERVICE_KEY') || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
   if (!url || !serviceKey) return json(500, { error: 'Function is missing SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY' });
 
   // Service-key requests bypass RLS — they are only made AFTER the admin check.
