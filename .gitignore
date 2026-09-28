@@ -9,3 +9,4 @@ dist
 coverage
 supabase/.temp
 supabase/.branches
+tests/e2e/shots

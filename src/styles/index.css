@@ -326,8 +326,14 @@ code{background:#eef1f3;border-radius:4px;padding:1px 5px;font-size:.92em}
   .paymethods .paym{font-size:15px}
   .t-total{font-size:32px}
 }
-/* admin top nav collapses into a menu on small screens */
+/* admin nav: second row that wraps on desktop, menu button on small screens */
 .menu-btn{display:none}
+@media (min-width:1101px){
+  .admin-top{flex-wrap:wrap;height:auto;padding:6px 14px;row-gap:4px}
+  .admin-top .brand{height:44px}
+  .admin-top .who{margin-left:auto}
+  .admin-tabs{order:3;flex-basis:100%;flex-wrap:wrap;overflow:visible;padding-bottom:4px}
+}
 @media (max-width:1100px){
   .menu-btn{display:inline-block}
   .admin-tabs{display:none;position:absolute;top:56px;left:0;right:0;background:var(--nav);flex-direction:column;padding:8px;z-index:45;box-shadow:0 10px 30px rgba(0,0,0,.3)}
@@ -335,9 +341,19 @@ code{background:#eef1f3;border-radius:4px;padding:1px 5px;font-size:.92em}
   .topbar{position:relative}
 }
 @media (max-width:560px){
+  .topbar{gap:8px;padding:0 10px}
+  .brand > div{display:none}
+  .tab{padding:8px 8px}
+  .btn-ghost{padding:7px 9px}
   .who .pill{display:none}
   .brand small{display:none}
   .kpis{grid-template-columns:1fr}
   .paymethods{grid-template-columns:1fr 1fr 1fr}
   .quick{grid-template-columns:repeat(3,1fr)}
 }
+/* bar list (dashboard/report charts): block-level fill, value column sized to content */
+.bar-row{grid-template-columns:minmax(90px,170px) 1fr auto}
+.bar-track{display:block;background:#eef3f2;border-radius:0 4px 4px 0}
+.bar-fill{display:block}
+.bar-row .bv{min-width:70px}
+.row-actions{display:flex;flex-wrap:wrap;gap:4px;min-width:130px;max-width:190px}

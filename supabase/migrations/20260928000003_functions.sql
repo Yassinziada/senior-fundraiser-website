@@ -470,6 +470,9 @@ begin
     perform public._fail('BAD_REQUEST', 'That category belongs to a different section.');
   end if;
   if not v_track then v_start := 0; v_min := 0; end if;
+  if v_sku is not null and exists (select 1 from public.products where sku = v_sku and id is distinct from v_id) then
+    perform public._fail('DUPLICATE', format('The code "%s" is already used by another product.', v_sku));
+  end if;
 
   if v_id is null then
     if exists (select 1 from public.products where section_code = v_section and lower(name) = lower(v_name)) then
@@ -651,7 +654,9 @@ begin
       end if;
     end if;
     perform public.admin_save_product(jsonb_build_object(
-      'section_code', v_section, 'category_id', v_cat, 'name', v_row ->> 'name', 'sku', v_row ->> 'sku',
+      'section_code', v_section, 'category_id', v_cat, 'name', v_row ->> 'name',
+      -- keep the old code unless another product already uses it
+      'sku', case when exists (select 1 from public.products where sku = v_row ->> 'sku') then null else v_row ->> 'sku' end,
       'price', v_row -> 'price', 'cost', coalesce(v_row -> 'cost', '0'::jsonb), 'image_url', v_row ->> 'image_url',
       'track_stock', coalesce(v_row -> 'track_stock', 'true'::jsonb),
       'starting_stock', coalesce(v_row -> 'stock', '0'::jsonb), 'min_stock', v_row -> 'min_stock',

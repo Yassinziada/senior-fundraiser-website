@@ -184,18 +184,20 @@ export default function ProductsPage() {
                         </div>
                       )}
                     </td>
-                    <td style={{ whiteSpace: 'nowrap' }}>
-                      <button type="button" className="btn sm" onClick={() => setEditing(p)}>
-                        Edit
-                      </button>{' '}
-                      {p.track_stock && (
-                        <button type="button" className="btn sm" onClick={() => setAdjusting(p)}>
-                          Stock ±
+                    <td>
+                      <div className="row-actions">
+                        <button type="button" className="btn sm" onClick={() => setEditing(p)}>
+                          Edit
                         </button>
-                      )}{' '}
-                      <button type="button" className="btn sm" onClick={() => toggle(p)}>
-                        {p.active ? 'Deactivate' : 'Activate'}
-                      </button>
+                        {p.track_stock && (
+                          <button type="button" className="btn sm" onClick={() => setAdjusting(p)}>
+                            Stock ±
+                          </button>
+                        )}
+                        <button type="button" className="btn sm" onClick={() => toggle(p)}>
+                          {p.active ? 'Deactivate' : 'Activate'}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );

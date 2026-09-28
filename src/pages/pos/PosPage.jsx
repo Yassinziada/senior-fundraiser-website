@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useSettings } from '../../context/SettingsContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
@@ -40,7 +40,16 @@ export default function PosPage({ section }) {
   const [cat, setCat] = useState('all');
   const [q, setQ] = useState('');
   const [cart, setCart] = useState(() => readJSON(cartKey, []));
-  const [pending, setPending] = useState(() => loadPendingAttempt(uid));
+  const [pending, setPendingState] = useState(() => loadPendingAttempt(uid));
+  // Refs are updated synchronously, so even several clicks in the same
+  // instant (before React re-renders) see the same attempt and the in-flight
+  // flag. State alone would let each click mint a new idempotency key.
+  const attemptRef = useRef(pending);
+  const inFlightRef = useRef(false);
+  const setPending = useCallback((a) => {
+    attemptRef.current = a;
+    setPendingState(a);
+  }, []);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [phase, setPhase] = useState('form'); // form | sending | uncertain
   const [payError, setPayError] = useState(null);
@@ -103,6 +112,8 @@ export default function PosPage({ section }) {
 
   const send = useCallback(
     async (attempt) => {
+      if (inFlightRef.current) return; // a request for this sale is already on its way
+      inFlightRef.current = true;
       setPhase('sending');
       setPayError(null);
       try {
@@ -129,14 +140,17 @@ export default function PosPage({ section }) {
         if (RELOAD_HINTS.has(e.code)) {
           await load({ silent: true });
         }
+      } finally {
+        inFlightRef.current = false;
       }
     },
-    [uid, finishSuccess, load],
+    [uid, finishSuccess, load, setPending],
   );
 
   const submitPayment = ({ method, received, receivedText }) => {
+    if (inFlightRef.current) return;
     const signature = `${section}|${cartSignature(cart)}|${method}|${received ?? ''}`;
-    const base = attemptFor(pending, signature);
+    const base = attemptFor(attemptRef.current, signature);
     const attempt = {
       ...base,
       section,
@@ -171,7 +185,7 @@ export default function PosPage({ section }) {
         if (!quiet) toast.error(e.network ? 'Still offline — try again when connected.' : e.message);
       }
     },
-    [pending, uid, toast, finishSuccess],
+    [pending, uid, toast, finishSuccess, setPending],
   );
 
   // After a refresh with an unresolved attempt: ask the server what happened.
@@ -298,7 +312,7 @@ export default function PosPage({ section }) {
           initialMethod={pending?.method ?? 'CASH'}
           initialReceived={pending?.receivedText ?? ''}
           onSubmit={submitPayment}
-          onRetry={() => pending && send(pending)}
+          onRetry={() => attemptRef.current && send(attemptRef.current)}
           onCheckStatus={() => checkStatus()}
           onClose={() => {
             if (phase === 'form') setCheckoutOpen(false);

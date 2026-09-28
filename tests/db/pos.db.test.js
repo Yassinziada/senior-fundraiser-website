@@ -531,6 +531,16 @@ d('School Bazaar POS database', () => {
         ]),
       ]);
       expect(r).toMatchObject({ created: 1, categories_created: 1, skipped: ['Caps'] });
+      // a clashing product code does not block the import (the code is dropped)
+      const r2 = await rpc(pool, admin, 'admin_import_products', [
+        JSON.stringify([{ section_code: 'SNACKS', category: 'Imported cat', name: 'Imported B', sku: 'BZ-P001', price: 5, stock: 1 }]),
+      ]);
+      expect(r2.created).toBe(1);
+      expect((await pool.query(`select sku from products where name = 'Imported B'`)).rows[0].sku).toBeNull();
+      const e = await errOf(
+        rpc(pool, admin, 'admin_save_product', [JSON.stringify({ section_code: 'SNACKS', name: 'Dup code', sku: 'BZ-P001', price: 1 })]),
+      );
+      expect(e.hint).toBe('DUPLICATE');
     });
   });
 

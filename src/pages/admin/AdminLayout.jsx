@@ -53,7 +53,7 @@ export default function AdminLayout() {
 
   return (
     <div className="app-shell">
-      <header className="topbar">
+      <header className="topbar admin-top">
         <button type="button" className="btn-ghost menu-btn" onClick={() => setMenuOpen((o) => !o)} aria-label="Menu">
           ☰
         </button>
