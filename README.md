@@ -730,3 +730,4 @@ Do this on the **real** deployed site, with the real devices, the day before:
     ├── db/                    ← npm run test:db (real migrations, RLS, races)
     └── e2e/                   ← optional browser tests + local setup script
 ```
+Deployment trigger
