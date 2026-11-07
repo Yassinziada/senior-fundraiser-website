@@ -21,7 +21,7 @@ function withDb(url, db) {
   return u.toString();
 }
 
-export async function createTestDatabase(dbName = DB_NAME) {
+export async function createTestDatabase(dbName = DB_NAME, { through } = {}) {
   if (!/^pos_[a-z_]+test$/.test(dbName) && dbName !== DB_NAME) throw new Error('Use a disposable pos_*test database');
   const admin = new pg.Client({ connectionString: TEST_URL });
   await admin.connect();
@@ -32,7 +32,7 @@ export async function createTestDatabase(dbName = DB_NAME) {
   const pool = new pg.Pool({ connectionString: withDb(TEST_URL, dbName), max: 10 });
   const files = [
     join(here, 'supabase-stub.sql'),
-    ...readdirSync(join(root, 'supabase', 'migrations')).sort().map((f) => join(root, 'supabase', 'migrations', f)),
+    ...readdirSync(join(root, 'supabase', 'migrations')).filter((f) => f.endsWith('.sql') && (!through || f <= through)).sort().map((f) => join(root, 'supabase', 'migrations', f)),
     join(root, 'supabase', 'seed.sql'),
     join(root, 'supabase', 'data', 'bazaar_catalog_from_original_pos.sql'),
     join(root, 'supabase', 'data', 'sample_snacks.sql'),

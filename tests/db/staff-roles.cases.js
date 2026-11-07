@@ -67,25 +67,56 @@ export async function checkStaffRoles(pool) {
   assert.equal((await as(pool, otherSupplier, 'select * from supplier_orders')).length, 0);
   assert.equal((await as(pool, otherSupplier, 'select * from supplier_order_items')).length, 0);
   assert.equal((await as(pool, ids.cashier, 'select * from supplier_orders')).length, 0);
-  await assert.rejects(rpc(pool, otherSupplier, 'supplier_set_available', [item.id, true]), /assigned/i);
+  await assert.rejects(rpc(pool, otherSupplier, 'supplier_confirm_purchase', [item.id, 3]), /assigned/i);
+  await assert.rejects(rpc(pool, otherSupplier, 'supplier_confirm_delivery', [item.id, 3]), /assigned/i);
   await assert.rejects(as(pool, ids.supplier, 'update supplier_order_items set received = quantity'), /permission/i);
   checks.push('Assigned-list isolation and duplicate-list prevention');
   const stock = async () => Number((await pool.query('select stock from products where id = $1', [product])).rows[0].stock);
   const before = await stock();
-  await rpc(pool, ids.supplier, 'supplier_set_available', [item.id, true]);
+  await assert.rejects(rpc(pool, ids.supplier, 'supplier_set_available', [item.id, true]), /permission/i);
+  for (const receiver of [ids.admin, ids.product_manager]) {
+    await assert.rejects(rpc(pool, receiver, 'receive_supplier_item', [randomUUID(), item.id, 1]), /supplier must confirm/i);
+    await assert.rejects(rpc(pool, receiver, 'supplier_confirm_purchase', [item.id, 3]), /cannot perform/i);
+    await assert.rejects(rpc(pool, receiver, 'supplier_confirm_delivery', [item.id, 3]), /cannot perform/i);
+  }
+  for (const role of ['finance','cashier']) {
+    await assert.rejects(rpc(pool, ids[role], 'supplier_confirm_purchase', [item.id, 3]), /cannot perform/i);
+    await assert.rejects(rpc(pool, ids[role], 'supplier_confirm_delivery', [item.id, 3]), /cannot perform/i);
+  }
+  await assert.rejects(rpc(pool, ids.supplier, '_supplier_confirm_quantity', [item.id, 3, 'purchase']), /permission/i);
+  await assert.rejects(rpc(pool, ids.supplier, 'supplier_confirm_purchase', [item.id, 1.5]), /invalid input|integer/i);
+  await assert.rejects(rpc(pool, ids.supplier, 'supplier_confirm_delivery', [item.id, 1]), /Confirm how many/i);
+  await assert.rejects(rpc(pool, ids.supplier, 'supplier_confirm_purchase', [item.id, 6]), /requested quantity/i);
+  await assert.rejects(rpc(pool, ids.supplier, 'supplier_confirm_purchase', [item.id, 0]), /positive whole/i);
+  await rpc(pool, ids.supplier, 'supplier_confirm_purchase', [item.id, 3]);
+  await rpc(pool, ids.supplier, 'supplier_confirm_purchase', [item.id, 3]);
+  await assert.rejects(rpc(pool, ids.supplier, 'supplier_confirm_purchase', [item.id, 2]), /cannot decrease/i);
+  await assert.rejects(rpc(pool, ids.product_manager, 'receive_supplier_item', [randomUUID(), item.id, 1]), /supplier must confirm/i);
+  await assert.rejects(rpc(pool, ids.supplier, 'supplier_confirm_delivery', [item.id, 4]), /purchased total/i);
+  await rpc(pool, ids.supplier, 'supplier_confirm_delivery', [item.id, 2]);
+  await rpc(pool, ids.supplier, 'supplier_confirm_delivery', [item.id, 2]);
+  await assert.rejects(rpc(pool, ids.supplier, 'supplier_confirm_delivery', [item.id, 1]), /must not decrease/i);
+  await assert.rejects(rpc(pool, ids.product_manager, 'receive_supplier_item', [randomUUID(), item.id, 3]), /supplier-confirmed delivery/i);
   assert.equal(await stock(), before);
   await assert.rejects(rpc(pool, ids.supplier, 'receive_supplier_item', [randomUUID(), item.id, 2]), /cannot perform/i);
-  checks.push('Supplier availability changes never change stock');
+  checks.push('Only the assigned supplier can confirm purchased and delivered quantities, without adding stock');
   const receiptKey = randomUUID();
   await rpc(pool, ids.product_manager, 'receive_supplier_item', [receiptKey, item.id, 2]);
   await rpc(pool, ids.product_manager, 'receive_supplier_item', [receiptKey, item.id, 2]);
   assert.equal(await stock(), before + 2);
   await assert.rejects(rpc(pool, ids.product_manager, 'receive_supplier_item', [receiptKey, item.id, 1]), /different receipt/i);
-  await assert.rejects(rpc(pool, ids.product_manager, 'receive_supplier_item', [randomUUID(), item.id, 4]), /remaining order/i);
+  await assert.rejects(rpc(pool, ids.product_manager, 'receive_supplier_item', [randomUUID(), item.id, 4]), /supplier-confirmed delivery/i);
   assert.equal(await stock(), before + 2);
+  await assert.rejects(rpc(pool, ids.admin, 'receive_supplier_item', [randomUUID(), item.id, 1]), /supplier-confirmed delivery/i);
+  await rpc(pool, ids.supplier, 'supplier_confirm_purchase', [item.id, 5]);
+  await assert.rejects(rpc(pool, ids.admin, 'receive_supplier_item', [randomUUID(), item.id, 1]), /supplier-confirmed delivery/i);
+  await rpc(pool, ids.supplier, 'supplier_confirm_delivery', [item.id, 5]);
   await rpc(pool, ids.admin, 'receive_supplier_item', [randomUUID(), item.id, 3]);
   assert.equal(await stock(), before + 5);
-  await assert.rejects(rpc(pool, ids.supplier, 'supplier_set_available', [item.id, false]), /already been received/i);
+  const [finalItem] = await as(pool, ids.supplier, 'select purchased, delivered, received from supplier_order_items where id = $1', [item.id]);
+  assert.deepEqual(finalItem, {purchased:5, delivered:5, received:5});
+  await assert.rejects(as(pool, ids.supplier, 'update supplier_order_items set delivered = 100'), /permission/i);
+  await assert.rejects(pool.query('update supplier_order_items set delivered = 0 where id = $1', [item.id]), /check constraint/i);
   checks.push('Partial receipts, safe retries, overreceipt and completed-item checks');
   const receipts = await as(pool, ids.admin, 'select * from supplier_receipts');
   assert.equal(receipts.length, 2);
@@ -93,10 +124,12 @@ export async function checkStaffRoles(pool) {
   await assert.rejects(pool.query('delete from supplier_receipts'), /append-only/i);
   const audit = await pool.query("select * from audit_logs where action = 'supplier_goods_received'");
   assert.equal(audit.rows.length, 2);
+  const confirmations = await pool.query("select action, count(*)::int n from audit_logs where action in ('supplier_purchase_confirmed','supplier_delivery_confirmed') group by action");
+  assert.deepEqual(Object.fromEntries(confirmations.rows.map(r=>[r.action,r.n])), {supplier_purchase_confirmed:2,supplier_delivery_confirmed:2});
   checks.push('Receipts are immutable and exactly-once actions are audited');
   await rpc(pool, ids.admin, 'admin_update_user', [ids.supplier, 'Supplier', 'supplier', null, false]);
   assert.equal((await as(pool, ids.supplier, 'select * from supplier_orders')).length, 0);
-  await assert.rejects(rpc(pool, ids.supplier, 'supplier_set_available', [item.id, true]), /inactive/i);
+  await assert.rejects(rpc(pool, ids.supplier, 'supplier_confirm_purchase', [item.id, 5]), /inactive/i);
   checks.push('Deactivation immediately revokes supplier access');
   return checks;
 }

@@ -21,7 +21,7 @@ try {
   const id=role==='supplier'?supplierId:userId;
   const profile={id, username:'testuser',full_name:'Test User',role,active:true,section_code:role==='cashier'?'BAZAAR':null};
   const orders=[{id:'00000000-0000-4000-8000-000000000010',title:'Weekly supplies',supplier_id:supplierId,
-    items:[{id:1,product_id:1,product_name:'Water',quantity:5,available:false,received:0}]}];
+    items:[{id:1,product_id:1,product_name:'Water',quantity:5,purchased:0,delivered:0,purchased_at:null,delivered_at:null,received:0}]}];
   const calls=[];
   const categories=[];
   await page.route('http://127.0.0.1:54329/**',async route=>{
@@ -51,7 +51,8 @@ try {
         data=category.id;
       }
     }
-    else if(fn==='supplier_set_available') orders[0].items[0].available=route.request().postDataJSON().p_available;
+    else if(fn==='supplier_confirm_purchase') Object.assign(orders[0].items[0], {purchased:route.request().postDataJSON().p_quantity,purchased_at:new Date().toISOString()});
+    else if(fn==='supplier_confirm_delivery') Object.assign(orders[0].items[0], {delivered:route.request().postDataJSON().p_quantity,delivered_at:new Date().toISOString()});
     else if(fn==='receive_supplier_item') orders[0].items[0].received+=route.request().postDataJSON().p_quantity;
     else if(fn==='admin_cash_summary') data=[];
    } else {
@@ -112,16 +113,53 @@ try {
    await page.getByRole('button',{name:'Send list',exact:true}).click();
    await page.waitForFunction(()=>!document.body.textContent.includes('An earlier action is unconfirmed'));
    assert.ok(calls.includes('create_supplier_order'));
+   const receive=page.getByRole('button',{name:'Confirm received',exact:true});
+   assert.equal(await receive.isDisabled(),true);
+   Object.assign(orders[0].items[0],{purchased:3,purchased_at:new Date().toISOString()});
+   await page.getByRole('button',{name:'Refresh',exact:true}).click();
+   await page.getByText('Awaiting supplier delivery confirmation').waitFor();
+   assert.equal(await receive.isDisabled(),true);
+   Object.assign(orders[0].items[0],{delivered:2,delivered_at:new Date().toISOString()});
+   await page.getByRole('button',{name:'Refresh',exact:true}).click();
+   await page.getByText('2 delivered units awaiting receipt').waitFor();
+   await page.getByRole('spinbutton',{name:'Received quantity for Water'}).fill('3');
+   assert.equal(await receive.isDisabled(),true);
    await page.getByRole('spinbutton',{name:'Received quantity for Water'}).fill('2');
-   await page.getByRole('button',{name:'Confirm received',exact:true}).click();
+   await receive.click();
    await page.getByRole('cell',{name:'2 / 5',exact:true}).waitFor();
    assert.ok(calls.includes('receive_supplier_item'));
+   assert.equal(await receive.isDisabled(),true);
    assert.equal(await page.getByRole('spinbutton',{name:'Received quantity for Water'}).inputValue(),'');
+   Object.assign(orders[0].items[0],{purchased:5,delivered:5});
+   await page.getByRole('button',{name:'Refresh',exact:true}).click();
+   await page.getByText('3 delivered units awaiting receipt').waitFor();
+   await page.getByRole('spinbutton',{name:'Received quantity for Water'}).fill('3');
+   await receive.click();
+   await page.getByRole('cell',{name:'5 / 5',exact:true}).waitFor();
+   console.log('PASS receiver requires supplier purchase and delivery and respects partial delivered quantities');
   }
   if(role==='supplier') {
-   await page.getByRole('checkbox',{name:'Can supply Water'}).click();
-   await page.waitForFunction(()=>document.querySelector('input[type=checkbox]')?.checked);
-   assert.ok(calls.includes('supplier_set_available'));
+   await page.getByRole('heading',{name:'Weekly supplies',exact:true}).waitFor();
+   assert.equal(await page.getByRole('checkbox').count(),0);
+   assert.equal(await page.getByRole('button',{name:'Confirm delivered',exact:true}).isDisabled(),true);
+   await page.getByRole('spinbutton',{name:'Total bought for Water'}).fill('3');
+   await page.getByRole('button',{name:'Confirm purchased',exact:true}).click();
+   await page.waitForFunction(()=>document.querySelector('input[aria-label="Total delivered for Water"]')?.max==='3');
+   await page.getByRole('spinbutton',{name:'Total delivered for Water'}).fill('4');
+   assert.equal(await page.getByRole('button',{name:'Confirm delivered',exact:true}).isDisabled(),true);
+   await page.getByRole('spinbutton',{name:'Total delivered for Water'}).fill('2');
+   await page.getByRole('button',{name:'Confirm delivered',exact:true}).click();
+   await page.getByRole('spinbutton',{name:'Total delivered for Water'}).waitFor();
+   assert.ok(calls.includes('supplier_confirm_purchase'));
+   assert.ok(calls.includes('supplier_confirm_delivery'));
+   assert.equal(calls.includes('receive_supplier_item'),false);
+   await page.getByRole('spinbutton',{name:'Total bought for Water'}).fill('5');
+   await page.getByRole('button',{name:'Confirm purchased',exact:true}).click();
+   await page.getByText('Requested quantity bought').waitFor();
+   await page.getByRole('spinbutton',{name:'Total delivered for Water'}).fill('5');
+   await page.getByRole('button',{name:'Confirm delivered',exact:true}).click();
+   await page.getByText('Purchased quantity delivered').waitFor();
+   console.log('PASS supplier enters purchased/delivered totals, supports partial batches and cannot receive stock');
    assert.equal(await page.getByRole('button',{name:'Confirm received',exact:true}).count(),0);
    assert.equal(await page.getByRole('heading',{name:'New supplier list'}).count(),0);
    await page.goto(base+'/admin/reports');await page.waitForURL(base+'/supplier');
