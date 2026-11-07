@@ -2,9 +2,11 @@ import { useState } from 'react';
 import Modal from '../../components/Modal.jsx';
 import ProductImage from '../../components/ProductImage.jsx';
 import { useSettings } from '../../context/SettingsContext.jsx';
-import { saveProduct, uploadProductImage } from '../../services/admin.js';
+import { uploadProductImage } from '../../services/admin.js';
 import { resizeImage } from '../../utils/image.js';
-import { toCents, centsToAmount } from '../../utils/money.js';
+import { toCents, centsToAmount, parseAmountInput } from '../../utils/money.js';
+import { useMoneyAction } from '../../hooks/useMoneyAction.js';
+import { AccountSelect } from '../../components/MoneyFields.jsx';
 import { pct } from '../../utils/format.js';
 
 const blank = (section, lowDefault) => ({
@@ -38,13 +40,16 @@ export default function ProductForm({ product, defaultSection, categories, onClo
         }
       : blank(defaultSection, settings.low_stock_default),
   );
-  const [busy, setBusy] = useState(false);
+  const action = useMoneyAction('product');
+  const busy = action.busy;
+  const [account, setAccount] = useState('CASH');
+  const [noSpend, setNoSpend] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState(null);
   const set = (k) => (e) => setF((x) => ({ ...x, [k]: e?.target ? (e.target.type === 'checkbox' ? e.target.checked : e.target.value) : e }));
 
   const priceC = toCents(f.price);
-  const costC = f.cost === '' ? 0 : toCents(f.cost);
+  const costC = f.cost === '' ? 0 : parseAmountInput(f.cost);
   const profitC = priceC - costC;
   const cats = categories.filter((c) => c.section_code === f.section_code);
 
@@ -67,12 +72,15 @@ export default function ProductForm({ product, defaultSection, categories, onClo
 
   const submit = async (e) => {
     e?.preventDefault();
+    if (busy) return;
+    if (action.pending) { if (await action.send(action.pending)) onSaved(); return; }
     if (Number.isNaN(priceC) || priceC < 0) return setError('Enter a valid selling price.');
-    if (Number.isNaN(costC) || costC < 0) return setError('Enter a valid cost (or 0).');
-    setBusy(true);
+    if (Number.isNaN(costC) || costC < 0) return setError('Enter a valid cost with at most two decimal places.');
+    if (isNew && f.track_stock && !/^\d+$/.test(String(f.starting_stock))) return setError('Enter a whole starting stock quantity.');
     setError(null);
     try {
-      const id = await saveProduct({
+      const saved = await action.send({ fn: 'admin_save_product', args: { p: {
+        funding_key: crypto.randomUUID(), payment_account: noSpend ? null : account, no_spend: noSpend,
         id: f.id,
         section_code: f.section_code,
         category_id: f.category_id === '' ? null : Number(f.category_id),
@@ -85,11 +93,11 @@ export default function ProductForm({ product, defaultSection, categories, onClo
         starting_stock: isNew && f.track_stock ? Math.max(0, parseInt(f.starting_stock || '0', 10)) : undefined,
         min_stock: f.track_stock ? Math.max(0, parseInt(f.min_stock || '0', 10)) : 0,
         active: f.active,
-      });
-      onSaved(id);
+      } } });
+      if (saved) onSaved();
     } catch (x) {
       setError(x.message);
-      setBusy(false);
+
     }
   };
 
@@ -104,13 +112,16 @@ export default function ProductForm({ product, defaultSection, categories, onClo
           <button type="button" className="btn" onClick={onClose} disabled={busy}>
             Cancel
           </button>
-          <button type="button" className="btn primary" onClick={submit} disabled={busy || uploading || !f.name.trim()}>
-            {busy ? 'Saving…' : 'Save product'}
+          <button type="button" className="btn primary" onClick={submit} disabled={busy || uploading || (!action.pending && !f.name.trim())}>
+            {busy ? 'Saving…' : action.pending ? 'Retry safely' : 'Save product'}
           </button>
         </>
       }
     >
       <form onSubmit={submit}>
+        {action.pending && <div className="notice warn">An earlier product save is unconfirmed. Retry safely to recover it.</div>}
+        {action.error && <div className="notice bad" role="alert">{action.error}</div>}
+        <fieldset disabled={busy || !!action.pending} style={{ border: 0, padding: 0 }}>
         <div className="frow">
           <label className="f">
             Name
@@ -156,15 +167,15 @@ export default function ProductForm({ product, defaultSection, categories, onClo
             <input className="input" inputMode="decimal" value={f.price} onChange={set('price')} placeholder="0.00" />
           </label>
           <label className="f">
-            Estimated unit cost ({settings.currency_code})
+            Unit buying cost ({settings.currency_code})
             <input className="input" inputMode="decimal" value={f.cost} onChange={set('cost')} placeholder="0.00" />
-            <small>Admin-only. Never shown to cashiers.</small>
+            <small>Stock purchases update the average cost. Once money tracking starts, the cost of existing stock cannot be edited here.</small>
           </label>
         </div>
         {!Number.isNaN(priceC) && !Number.isNaN(costC) && f.price !== '' && (
           <div className="notice info">
             Profit per item: <b>{money(centsToAmount(profitC))}</b> · Margin: <b>{priceC > 0 ? pct((profitC / priceC) * 100) : '—'}</b>
-            {!isNew && ' · Changing price/cost affects future sales only; past sales keep their recorded values.'}
+            {!isNew && ' · Past sales keep their recorded price and cost.'}
           </div>
         )}
         <label className="chk" style={{ marginBottom: 12 }}>
@@ -194,6 +205,10 @@ export default function ProductForm({ product, defaultSection, categories, onClo
             </label>
           </div>
         )}
+        {isNew && f.track_stock && Number(f.starting_stock) > 0 && <div className="notice info">
+          <label className="chk"><input type="checkbox" checked={noSpend} onChange={e => setNoSpend(e.target.checked)} />No money spent (donated or free stock)</label>
+          {!noSpend && <><AccountSelect value={account} onChange={setAccount} /><p>Deduct {money(centsToAmount(costC * Number(f.starting_stock)))} when the product and stock are saved. Enter starting money first.</p></>}
+        </div>}
         <div className="img-row">
           <ProductImage product={{ name: f.name, image_url: f.image_url }} className="imgprev" />
           <div style={{ flex: 1 }}>
@@ -216,6 +231,7 @@ export default function ProductForm({ product, defaultSection, categories, onClo
         <label className="chk">
           <input type="checkbox" checked={f.active} onChange={set('active')} /> Active (visible and sellable in the POS)
         </label>
+        </fieldset>
         {error && (
           <div className="notice bad" style={{ marginTop: 12 }}>
             {error}

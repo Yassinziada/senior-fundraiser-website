@@ -7,6 +7,7 @@ import { useRealtime } from '../../hooks/useRealtime.js';
 import { pendingVoidCount } from '../../services/admin.js';
 import ConnectionBanner from '../../components/ConnectionBanner.jsx';
 import Dashboard from './Dashboard.jsx';
+import MoneyPage from './MoneyPage.jsx';
 import SellPage from './SellPage.jsx';
 import SalesPage from './SalesPage.jsx';
 import VoidsPage from './VoidsPage.jsx';
@@ -31,6 +32,7 @@ const NAV = [
   ['categories', 'Categories'],
   ['stock', 'Stock log'],
   ['cash', 'Cash handover'],
+  ['money', 'Money'],
   ['reports', 'Reports'],
   ['users', 'Users'],
   ['audit', 'Audit log'],
@@ -95,6 +97,7 @@ export default function AdminLayout() {
           <Route path="products" element={canOpenPage(profile.role, 'products') ? <ProductsPage /> : <Navigate to={firstStaffPage(profile.role)} replace />} />
           <Route path="categories" element={canOpenPage(profile.role, 'categories') ? <CategoriesPage /> : <Navigate to={firstStaffPage(profile.role)} replace />} />
           <Route path="stock" element={canOpenPage(profile.role, 'stock') ? <StockMovementsPage /> : <Navigate to={firstStaffPage(profile.role)} replace />} />
+          <Route path="money" element={canOpenPage(profile.role, 'money') ? <MoneyPage /> : <Navigate to={firstStaffPage(profile.role)} replace />} />
           <Route path="cash" element={canOpenPage(profile.role, 'cash') ? <CashHandoverPage /> : <Navigate to={firstStaffPage(profile.role)} replace />} />
           <Route path="reports" element={canOpenPage(profile.role, 'reports') ? <ReportsPage /> : <Navigate to={firstStaffPage(profile.role)} replace />} />
           <Route path="users" element={canOpenPage(profile.role, 'users') ? <UsersPage /> : <Navigate to={firstStaffPage(profile.role)} replace />} />

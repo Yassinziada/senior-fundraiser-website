@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { useSettings } from '../../context/SettingsContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
-import { importProducts, uploadProductImage } from '../../services/admin.js';
+import { uploadProductImage } from '../../services/admin.js';
 import { SectionFilter } from '../../components/Filters.jsx';
 import { parseProductsFile, CSV_TEMPLATE } from '../../utils/legacyImport.js';
 import { downloadFile } from '../../utils/csv.js';
+import { useMoneyAction } from '../../hooks/useMoneyAction.js';
+import { AccountSelect } from '../../components/MoneyFields.jsx';
 import { resizeImage } from '../../utils/image.js';
 
 /**
@@ -15,8 +17,12 @@ import { resizeImage } from '../../utils/image.js';
 export default function ImportPage() {
   const { money, sections } = useSettings();
   const toast = useToast();
+  const action = useMoneyAction('import');
+  const [account, setAccount] = useState('CASH');
+  const [noSpend, setNoSpend] = useState(false);
   const [defaultSection, setDefaultSection] = useState('BAZAAR');
   const [parsed, setParsed] = useState(null);
+  const invalidCosts = (parsed?.rows ?? []).filter(r => r.track_stock && r.stock > 0 && !r.purchase_cost_valid);
   const [fileText, setFileText] = useState(null);
   const [fileName, setFileName] = useState('');
   const [busy, setBusy] = useState(false);
@@ -39,7 +45,8 @@ export default function ImportPage() {
   };
 
   const run = async () => {
-    if (!parsed?.rows.length) return;
+    if (action.pending) { const saved = await action.send(action.pending); if (saved) { setResult(saved.data); toast.ok('Import confirmed'); } return; }
+    if (!parsed?.rows.length || busy || (!noSpend && invalidCosts.length)) return;
     setBusy(true);
     setResult(null);
     try {
@@ -57,12 +64,14 @@ export default function ImportPage() {
             /* keep going without the photo */
           }
         }
-        rows.push(row);
+        rows.push({ ...row, funding_key: crypto.randomUUID(), no_spend: noSpend, payment_account: noSpend ? null : account });
       }
       setProgress('Saving products…');
-      const res = await importProducts(rows);
-      setResult(res);
-      toast.ok(`${res.created} product(s) imported`);
+      const saved = await action.send({ fn: 'admin_import_products', args: { p_rows: rows } });
+      if (saved) {
+        setResult(saved.data);
+        toast.ok('Import saved. Existing products were skipped.');
+      }
     } catch (e) {
       toast.error(e.message);
     } finally {
@@ -82,6 +91,8 @@ export default function ImportPage() {
           Download CSV template
         </button>
       </div>
+      {action.error && <div className="notice bad" role="alert">{action.error}</div>}
+      {action.pending && <div className="notice warn">An import is unconfirmed. <button className="btn" disabled={action.busy} onClick={run}>Retry safely</button></div>}
       <div className="card">
         <h3>1. Where do products without a section go?</h3>
         <SectionFilter
@@ -146,15 +157,20 @@ export default function ImportPage() {
               </table>
             </div>
           )}
+          <div className="notice info">
+            <p>New stock is paid from the selected account using each row’s Cost × Stock. Existing products are skipped without charging. Admin must enter starting money first.</p>
+            <label className="chk"><input type="checkbox" checked={noSpend} onChange={e => setNoSpend(e.target.checked)} />No money spent (existing inventory or donations)</label>
+            {!noSpend && <AccountSelect value={account} onChange={setAccount} />}
+            {!noSpend && invalidCosts.length > 0 && <p className="bad-t" role="alert">Fix the buying cost in the file before importing paid stock: {invalidCosts.map(r => r.name).join(', ')}. Use a number with at most two decimal places (explicit 0 for free goods).</p>}
+          </div>
           <div className="actions" style={{ marginTop: 12 }}>
-            <button type="button" className="btn primary" onClick={run} disabled={busy || !parsed.rows.length}>
+            <button type="button" className="btn primary" onClick={run} disabled={busy || action.busy || !!action.pending || !parsed.rows.length || (!noSpend && invalidCosts.length > 0)}>
               {busy ? progress || 'Importing…' : `Import ${parsed.rows.length} product(s)`}
             </button>
           </div>
           {result && (
             <div className="notice ok" style={{ marginTop: 12 }}>
-              Imported <b>{result.created}</b> product(s), created <b>{result.categories_created}</b> categor
-              {result.categories_created === 1 ? 'y' : 'ies'}.
+              Imported <b>{result.created}</b> product(s), created <b>{result.categories_created}</b> categories. Existing products were skipped without charging.
               {result.skipped?.length > 0 && <> Skipped (already exist): {result.skipped.join(', ')}.</>}
             </div>
           )}

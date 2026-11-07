@@ -4,7 +4,7 @@ export const ROLE_LABELS = {
 };
 export const roleHome = (role) => role === 'cashier' ? '/pos' : role === 'supplier' ? '/supplier' : '/admin';
 export const canOpenPage = (role, page) => role === 'admin' || ({
-  finance: ['', 'reports', 'cash'],
+  finance: ['', 'reports', 'cash', 'money'],
   product_manager: ['products', 'categories', 'stock', 'import', 'suppliers'],
 }[role] ?? []).includes(page);
 export const firstStaffPage = (role) => role === 'product_manager' ? '/admin/products' : '/admin';

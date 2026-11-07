@@ -22,6 +22,8 @@ try {
   const profile={id, username:'testuser',full_name:'Test User',role,active:true,section_code:role==='cashier'?'BAZAAR':null};
   const orders=[{id:'00000000-0000-4000-8000-000000000010',title:'Weekly supplies',supplier_id:supplierId,
     items:[{id:1,product_id:1,product_name:'Water',quantity:5,purchased:0,delivered:0,purchased_at:null,delivered_at:null,received:0}]}];
+  const money={started_at:role==='admin'?null:new Date().toISOString(),cash:1000,telda:100,instapay:50,total:1150,starting:1150,sales:0,cogs:0,purchases:0,expenses:0,stock_losses:0,legacy_refunds:0,gross_profit:0,net_profit:0};
+  const moneyKeys=new Set(); let loseExpenseResponse=true;
   const calls=[];
   const categories=[];
   await page.route('http://127.0.0.1:54329/**',async route=>{
@@ -35,6 +37,20 @@ try {
    else if(url.pathname.includes('/rpc/')) {
     const fn=url.pathname.split('/').at(-1); calls.push(fn);
     if(fn==='public_app_info') data={event_name:'Test fundraiser'};
+    else if(fn==='money_summary') data=money;
+    else if(fn==='money_open') {
+      const a=route.request().postDataJSON();
+      Object.assign(money,{started_at:new Date().toISOString(),cash:a.p_cash,telda:a.p_telda,instapay:a.p_instapay,total:a.p_cash+a.p_telda+a.p_instapay,starting:a.p_cash+a.p_telda+a.p_instapay});
+    }
+    else if(fn==='money_record') {
+      const a=route.request().postDataJSON();
+      if(!moneyKeys.has(a.p_key)) {
+        moneyKeys.add(a.p_key);money[a.p_account.toLowerCase()]-=a.p_amount;
+        if(a.p_kind==='expense') {money.total-=a.p_amount;money.expenses+=a.p_amount;money.net_profit-=a.p_amount;}
+        else money[a.p_to.toLowerCase()]+=a.p_amount;
+      }
+      if(a.p_kind==='expense' && loseExpenseResponse) {loseExpenseResponse=false;return route.abort('failed');}
+    }
     else if(fn==='admin_sales_report') data=report;
     else if(fn==='admin_inventory_summary') data={low_stock:[],out_of_stock:[],units_in_stock:10,stock_cost_value:80,stock_retail_value:150};
     else if(fn==='admin_products_overview') data=[product];
@@ -53,7 +69,7 @@ try {
     }
     else if(fn==='supplier_confirm_purchase') Object.assign(orders[0].items[0], {purchased:route.request().postDataJSON().p_quantity,purchased_at:new Date().toISOString()});
     else if(fn==='supplier_confirm_delivery') Object.assign(orders[0].items[0], {delivered:route.request().postDataJSON().p_quantity,delivered_at:new Date().toISOString()});
-    else if(fn==='receive_supplier_item') orders[0].items[0].received+=route.request().postDataJSON().p_quantity;
+    else if(fn==='money_stock') orders[0].items[0].received+=route.request().postDataJSON().p_quantity;
     else if(fn==='admin_cash_summary') data=[];
    } else {
     const table=url.pathname.split('/').at(-1);
@@ -74,9 +90,37 @@ try {
   await page.getByRole('button',{name:/sign in/i}).click();
   const expected=role==='cashier'?'/pos':role==='supplier'?'/supplier':role==='product_manager'?'/admin/products':'/admin';
   await page.waitForURL(base+expected);
+  if(role==='admin') {
+   await page.getByRole('link',{name:'Money',exact:true}).click();
+   await page.getByLabel('Starting Cash',{exact:true}).fill('1000');
+   await page.getByLabel('Starting Telda',{exact:true}).fill('100');
+   await page.getByLabel('Starting InstaPay',{exact:true}).fill('50');
+   await page.getByRole('checkbox').check();
+   await page.getByRole('button',{name:'Start money tracking'}).click();
+   await page.getByRole('heading',{name:'How the totals add up'}).waitFor();
+   await page.getByLabel('Amount',{exact:true}).fill('10');
+   await page.getByLabel('Description',{exact:true}).fill('Transport');
+   await page.getByRole('button',{name:'Record expense'}).click();
+   await page.getByRole('button',{name:'Retry safely'}).waitFor();
+   await page.reload();
+   await page.getByRole('button',{name:'Retry safely'}).click();
+   await page.getByRole('status').filter({hasText:'Saved.'}).waitFor();
+   assert.equal(money.total,1140);assert.equal(money.expenses,10);
+   await page.getByLabel('Type',{exact:true}).selectOption('transfer');
+   await page.getByLabel('Amount',{exact:true}).fill('100');
+   await page.getByLabel('Description',{exact:true}).fill('Move money');
+   await page.getByRole('button',{name:'Record transfer'}).click();
+   await page.waitForFunction(()=>!document.body.textContent.includes('The last action is unconfirmed'));
+   assert.equal(money.total,1140);assert.equal(money.cash,890);assert.equal(money.telda,200);
+   await page.setViewportSize({width:390,height:844});
+   await page.screenshot({path:'/workspace/work/money-mobile.png',fullPage:true});
+   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),'Money page fits mobile width');
+   await page.setViewportSize({width:1280,height:720});
+   console.log('PASS opening balances, expense lost-response recovery across refresh, transfer and combined total');
+  }
   if(role==='finance') {
    await page.getByRole('heading',{name:'Dashboard',exact:true}).waitFor();
-   assert.deepEqual(await page.locator('nav a').allTextContents(),['Dashboard','Cash handover','Reports']);
+   assert.deepEqual(await page.locator('nav a').allTextContents(),['Dashboard','Cash handover','Money','Reports']);
    await page.goto(base+'/admin/users'); await page.waitForURL(base+'/admin');
    await page.getByRole('link',{name:'Reports',exact:true}).click();
    await page.getByRole('heading',{name:'Reports',exact:true}).waitFor();
@@ -125,15 +169,17 @@ try {
    await page.getByRole('spinbutton',{name:'Received quantity for Water'}).fill('3');
    assert.equal(await receive.isDisabled(),true);
    await page.getByRole('spinbutton',{name:'Received quantity for Water'}).fill('2');
+   await page.getByRole('spinbutton',{name:'Buying price per item'}).fill('8');
    await receive.click();
    await page.getByRole('cell',{name:'2 / 5',exact:true}).waitFor();
-   assert.ok(calls.includes('receive_supplier_item'));
+   assert.ok(calls.includes('money_stock'));
    assert.equal(await receive.isDisabled(),true);
    assert.equal(await page.getByRole('spinbutton',{name:'Received quantity for Water'}).inputValue(),'');
    Object.assign(orders[0].items[0],{purchased:5,delivered:5});
    await page.getByRole('button',{name:'Refresh',exact:true}).click();
    await page.getByText('3 delivered units awaiting receipt').waitFor();
    await page.getByRole('spinbutton',{name:'Received quantity for Water'}).fill('3');
+   await page.getByRole('spinbutton',{name:'Buying price per item'}).fill('8');
    await receive.click();
    await page.getByRole('cell',{name:'5 / 5',exact:true}).waitFor();
    console.log('PASS receiver requires supplier purchase and delivery and respects partial delivered quantities');
@@ -152,7 +198,7 @@ try {
    await page.getByRole('spinbutton',{name:'Total delivered for Water'}).waitFor();
    assert.ok(calls.includes('supplier_confirm_purchase'));
    assert.ok(calls.includes('supplier_confirm_delivery'));
-   assert.equal(calls.includes('receive_supplier_item'),false);
+   assert.equal(calls.includes('money_stock'),false);
    await page.getByRole('spinbutton',{name:'Total bought for Water'}).fill('5');
    await page.getByRole('button',{name:'Confirm purchased',exact:true}).click();
    await page.getByText('Requested quantity bought').waitFor();

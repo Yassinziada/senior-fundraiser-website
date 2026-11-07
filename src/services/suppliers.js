@@ -15,6 +15,7 @@ export const confirmSupplierPurchase = ({ item, quantity }) => rpc('supplier_con
 export const confirmSupplierDelivery = ({ item, quantity }) => rpc('supplier_confirm_delivery', {
   p_item: item, p_quantity: quantity,
 });
-export const receiveSupplierItem = ({ key, item, quantity }) => rpc('receive_supplier_item', {
-  p_key: key, p_item: item, p_quantity: quantity,
+export const receiveSupplierItem = ({ key, item, product, quantity, unitCost, account }) => rpc('money_stock', {
+  p_key: key, p_item: item, p_product: product, p_mode: 'add', p_quantity: quantity,
+  p_reason: 'Approved supplier delivery', p_unit_cost: unitCost, p_account: account, p_no_spend: false,
 });

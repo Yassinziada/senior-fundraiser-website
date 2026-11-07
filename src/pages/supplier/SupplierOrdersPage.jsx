@@ -5,6 +5,8 @@ import { useRealtime } from '../../hooks/useRealtime.js';
 import { productsOverview } from '../../services/admin.js';
 import { supplierOrders, supplierAccounts, createSupplierOrder, confirmSupplierPurchase, confirmSupplierDelivery, receiveSupplierItem } from '../../services/suppliers.js';
 import { ErrorNotice, Spinner } from '../../components/ui.jsx';
+import MoneyFields from '../../components/MoneyFields.jsx';
+import { parseAmountInput, centsToAmount } from '../../utils/money.js';
 import { readJSON } from '../../utils/localStore.js';
 
 export default function SupplierOrdersPage() {
@@ -62,9 +64,9 @@ export default function SupplierOrdersPage() {
     send({ type: 'create', key: crypto.randomUUID(), supplier, title: title.trim(),
       items: lines.map((l) => ({ product_id: Number(l.product_id), quantity: Number(l.quantity) })) });
   };
-  const confirm = (type, item, quantity) => {
+  const confirm = (type, item, quantity, payment = {}) => {
     if (pendingRef.current || busyRef.current) return;
-    return send({ type, key: crypto.randomUUID(), item: item.id, quantity });
+    return send({ type, key: crypto.randomUUID(), item: item.id, product: item.product_id, quantity, ...payment });
   };
   const products = (options?.products ?? []).filter((p) => p.active && p.track_stock);
   return <div className="page">
@@ -117,8 +119,8 @@ export default function SupplierOrdersPage() {
             <td>{manager ? <ProgressQuantity value={item.delivered} confirmed={item.delivered_at} /> :
               <SupplierQuantityForm item={item} stage="delivery" disabled={busy || !!pending} onConfirm={(quantity) => confirm('delivery', item, quantity)} />}</td>
             <td>{item.received} / {item.quantity}</td>
-            {manager && <td><ReceiveForm item={item} disabled={busy || !!pending} onReceive={(quantity) => {
-              return confirm('receive', item, quantity);
+            {manager && <td><ReceiveForm item={item} disabled={busy || !!pending} onReceive={(quantity, payment) => {
+              return confirm('receive', item, quantity, payment);
             }} /></td>}
           </tr>)}</tbody>
         </table></div>
@@ -128,13 +130,17 @@ export default function SupplierOrdersPage() {
 
 function ReceiveForm({ item, disabled, onReceive }) {
   const [quantity, setQuantity] = useState('');
+  const [cost, setCost] = useState('');
+  const [account, setAccount] = useState('CASH');
+  const costCents = parseAmountInput(cost);
   if (item.received === item.quantity) return 'Complete';
   const remaining = item.delivered - item.received;
   const ready = !!item.purchased_at && !!item.delivered_at && remaining > 0;
-  const valid = Number.isInteger(Number(quantity)) && Number(quantity) > 0 && Number(quantity) <= remaining;
-  return <form className="actions" onSubmit={async (e) => { e.preventDefault(); if (!disabled && ready && valid && await onReceive(Number(quantity))) setQuantity(''); }}>
+  const valid = Number.isInteger(Number(quantity)) && Number(quantity) > 0 && Number(quantity) <= remaining && Number.isFinite(costCents);
+  return <form className="actions" onSubmit={async (e) => { e.preventDefault(); if (!disabled && ready && valid && await onReceive(Number(quantity), { unitCost: centsToAmount(costCents), account })) setQuantity(''); }}>
     <span className="muted small">{ready ? `${remaining} delivered units awaiting receipt` : !item.purchased_at ? 'Awaiting supplier purchase confirmation' : !item.delivered_at ? 'Awaiting supplier delivery confirmation' : 'All confirmed deliveries received'}</span>
     <input className="input" style={{ width: 100 }} aria-label={`Received quantity for ${item.product_name}`} type="number" required min="1" max={remaining || undefined} step="1" value={quantity} disabled={disabled || !ready} onChange={(e) => setQuantity(e.target.value)} />
+    {ready && <MoneyFields cost={cost} setCost={setCost} account={account} setAccount={setAccount} quantity={Number(quantity)} disabled={disabled} />}
     <button className="btn sm primary" disabled={disabled || !ready || !valid} type="submit">Confirm received</button>
   </form>;
 }
