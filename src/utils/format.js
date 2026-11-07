@@ -1,10 +1,9 @@
 export const PAYMENT_METHODS = [
   { id: 'CASH', label: 'Cash' },
   { id: 'TELDA', label: 'Telda' },
-  { id: 'INSTAPAY', label: 'InstaPay' },
 ];
 
-export const paymentLabel = (id) => PAYMENT_METHODS.find((m) => m.id === id)?.label ?? id;
+export const paymentLabel = (id) => PAYMENT_METHODS.find((m) => m.id === id)?.label ?? (id === 'INSTAPAY' ? 'InstaPay (historical)' : id);
 
 export function sectionLabel(code, sections = []) {
   return sections.find((s) => s.code === code)?.name ?? (code ? code.charAt(0) + code.slice(1).toLowerCase() : 'All');

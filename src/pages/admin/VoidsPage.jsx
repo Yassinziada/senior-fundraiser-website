@@ -135,7 +135,7 @@ export default function VoidsPage({ onChange }) {
               {deciding.approve ? (
                 <>
                   The sale will be marked VOIDED, a refund of <b>{money(deciding.req.txn?.total)}</b> ({paymentLabel(deciding.req.txn?.payment_method)})
-                  is recorded and the items go back into stock.
+                  is deducted from that payment account and the items go back into stock. Confirm only after returning the money.
                 </>
               ) : (
                 <>The sale stays valid. The request and your rejection are kept on record.</>

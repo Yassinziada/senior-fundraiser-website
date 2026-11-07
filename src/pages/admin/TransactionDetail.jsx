@@ -158,7 +158,7 @@ export default function TransactionDetail({ id, onClose, onChanged }) {
           intro={
             <p>
               This marks the sale as VOIDED, records a refund of <b>{money(t.total)}</b> ({paymentLabel(t.payment_method)}) and puts the items back
-              into stock. Nothing is deleted.
+              into stock. The refund is deducted from that payment account. Confirm only after returning the money.
             </p>
           }
           confirmLabel="Void sale"

@@ -8,6 +8,8 @@ import LoginPage from './pages/LoginPage.jsx';
 import { ConfigErrorPage, InactivePage, LoadErrorPage } from './pages/StatusPages.jsx';
 import CashierLayout from './pages/pos/CashierLayout.jsx';
 import AdminLayout from './pages/admin/AdminLayout.jsx';
+import SupplierLayout from './pages/supplier/SupplierLayout.jsx';
+import { roleHome, firstStaffPage } from './utils/roles.js';
 
 export default function App() {
   if (configError) return <ConfigErrorPage message={configError} />;
@@ -41,11 +43,12 @@ function AppRoutes() {
   }
   if (status === 'inactive') return <InactivePage />;
 
-  const home = profile.role === 'admin' ? '/admin' : '/pos';
+  const home = ['admin', 'finance', 'product_manager'].includes(profile.role) ? firstStaffPage(profile.role) : roleHome(profile.role);
   return (
     <Routes>
-      <Route path="/pos/*" element={profile.role === 'cashier' ? <CashierLayout /> : <Navigate to="/admin/sell" replace />} />
-      <Route path="/admin/*" element={profile.role === 'admin' ? <AdminLayout /> : <Navigate to="/pos" replace />} />
+      <Route path="/pos/*" element={profile.role === 'cashier' ? <CashierLayout /> : <Navigate to={profile.role === 'admin' ? '/admin/sell' : home} replace />} />
+      <Route path="/admin/*" element={['admin', 'finance', 'product_manager'].includes(profile.role) ? <AdminLayout /> : <Navigate to={home} replace />} />
+      <Route path="/supplier/*" element={profile.role === 'supplier' ? <SupplierLayout /> : <Navigate to={home} replace />} />
       <Route path="*" element={<Navigate to={home} replace />} />
     </Routes>
   );

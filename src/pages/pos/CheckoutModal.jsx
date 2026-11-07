@@ -15,7 +15,7 @@ const QUICK = [10, 20, 50, 100, 200, 500];
 export default function CheckoutModal({ totalCents, units, phase, error, initialMethod = 'CASH', initialReceived = '', onSubmit, onRetry, onCheckStatus, onClose }) {
   const { money, settings } = useSettings();
   const online = useOnlineStatus();
-  const [method, setMethod] = useState(initialMethod);
+  const [method, setMethod] = useState(PAYMENT_METHODS.some(m => m.id === initialMethod) || phase === 'uncertain' ? initialMethod : 'CASH');
   const [received, setReceived] = useState(initialReceived);
 
   const receivedCents = parseAmountInput(received);

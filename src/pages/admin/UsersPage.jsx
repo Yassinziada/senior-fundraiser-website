@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ROLE_LABELS } from '../../utils/roles.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useSettings } from '../../context/SettingsContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
@@ -35,7 +36,7 @@ export default function UsersPage() {
           <p>Cashiers see only the POS of their assigned section. Deactivating an account blocks all its data access immediately.</p>
         </div>
         <button type="button" className="btn primary" onClick={() => setCreating(true)}>
-          + Create cashier
+          + Create user
         </button>
       </div>
       <ErrorNotice error={error} onRetry={reload} />
@@ -71,8 +72,8 @@ export default function UsersPage() {
                     {u.role === 'cashier' ? u.username : u.login_email}
                     <div className="muted small">{u.role === 'cashier' ? 'username + PIN' : 'email + password'}</div>
                   </td>
-                  <td>{u.role === 'admin' ? <Badge tone="info">ADMIN</Badge> : <Badge>CASHIER</Badge>}</td>
-                  <td>{u.role === 'cashier' ? sectionLabel(u.section_code, sections) : 'All'}</td>
+                  <td><Badge>{ROLE_LABELS[u.role]}</Badge></td>
+                  <td>{u.role === 'cashier' ? sectionLabel(u.section_code, sections) : u.role === 'supplier' ? 'Assigned lists' : 'All'}</td>
                   <td>{u.active ? <Badge tone="ok">ACTIVE</Badge> : <Badge tone="bad">INACTIVE</Badge>}</td>
                   <td style={{ whiteSpace: 'nowrap' }}>
                     <button type="button" className="btn sm" onClick={() => setEditing(u)}>
@@ -178,14 +179,11 @@ function CreateUserModal({ onClose, onCreated }) {
       }
     >
       <form onSubmit={submit}>
-        <div className="subtabs">
-          <button type="button" className={`subtab ${role === 'cashier' ? 'on' : ''}`} onClick={() => setRole('cashier')}>
-            Cashier
-          </button>
-          <button type="button" className={`subtab ${role === 'admin' ? 'on' : ''}`} onClick={() => setRole('admin')}>
-            Admin
-          </button>
-        </div>
+        <label className="f">Role
+          <select aria-label="Role" className="input" value={role} onChange={(e) => setRole(e.target.value)}>
+            {Object.entries(ROLE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </select>
+        </label>
         <div className="frow">
           <label className="f">
             Display name
@@ -280,9 +278,8 @@ function EditUserModal({ user, isSelf, onClose, onSaved }) {
       <div className="frow">
         <label className="f">
           Role
-          <select className="input" value={role} onChange={(e) => setRole(e.target.value)} disabled={isSelf}>
-            <option value="cashier">Cashier</option>
-            <option value="admin">Admin</option>
+          <select aria-label="Role" className="input" value={role} onChange={(e) => setRole(e.target.value)} disabled={isSelf}>
+            {Object.entries(ROLE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select>
         </label>
         {role === 'cashier' && (

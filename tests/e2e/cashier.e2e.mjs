@@ -84,11 +84,12 @@ await page.getByText(/Sale BZR-\d+ saved/).waitFor();
 assert(!(await page.locator('.big-change').count()), 'no change shown for Telda');
 await page.getByRole('button', { name: 'Close' }).last().click();
 
-// 4. InstaPay + double-click protection
+// 4. Telda + double-click protection (Cash/Telda are the only new choices)
 const before = (await q(`select count(*)::int n from transactions`))[0].n;
 await card('Erasers').click();
 await page.getByRole('button', { name: /CHECKOUT/ }).click();
-await page.getByRole('radio', { name: 'InstaPay' }).click();
+assert((await page.getByRole('radio', { name: 'InstaPay' }).count()) === 0, 'InstaPay is not offered for new sales');
+await page.getByRole('radio', { name: 'Telda' }).click();
 // three clicks in the same JS tick, before React can disable the button
 let rpcCalls = 0;
 page.on('request', (r) => r.url().includes('/rpc/pos_checkout') && rpcCalls++);

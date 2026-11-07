@@ -11,6 +11,12 @@
 //   Money in that file is in PIASTERS (integer, 2500 = 25.00 EGP).
 
 const LEGACY_APP_ID = 'bazaar-pos';
+// Paid inventory must have an explicit, valid cost; malformed text must not
+// silently become a free purchase. Legacy costs are integer piasters.
+const validPurchaseCost = (value, legacy = false) => {
+  const text = String(value ?? '').trim().replace(/,/g, '');
+  return (legacy ? /^\d+$/ : /^\d+(\.\d{1,2})?$/).test(text) && Number.isFinite(Number(text));
+};
 
 /** Parse CSV text into an array of objects keyed by (lower-cased) header. */
 export function parseCSV(text) {
@@ -122,6 +128,7 @@ export function parseProductsFile(text, { defaultSection = 'BAZAAR', fileName = 
         sku: p.id ? String(p.id) : null,
         price: rawPrice === null ? 0 : rawPrice / moneyDivisor,
         cost: rawCost === null ? 0 : rawCost / moneyDivisor,
+        purchase_cost_valid: validPurchaseCost(pick(p, ['cost', 'unitCost', 'costPrice', 'estimatedCost']), isLegacy),
         stock: service ? 0 : Math.max(0, Math.floor(toNum(pick(p, ['stock', 'currentStock', 'qty', 'quantity'])) ?? 0)),
         min_stock: service ? 0 : Math.max(0, Math.floor(toNum(pick(p, ['minStock', 'min_stock', 'minimumStock'])) ?? 0)),
         track_stock: !service,
@@ -151,6 +158,7 @@ export function parseProductsFile(text, { defaultSection = 'BAZAAR', fileName = 
       sku: pick(r, ['sku', 'code', 'id']) ?? null,
       price: toNum(pick(r, ['price', 'selling_price', 'sale_price'])) ?? 0,
       cost: toNum(pick(r, ['cost', 'unit_cost', 'estimated_cost'])) ?? 0,
+      purchase_cost_valid: validPurchaseCost(pick(r, ['cost', 'unit_cost', 'estimated_cost'])),
       stock: service ? 0 : Math.max(0, Math.floor(toNum(pick(r, ['stock', 'starting_stock', 'quantity', 'qty'])) ?? 0)),
       min_stock: service ? 0 : Math.max(0, Math.floor(toNum(pick(r, ['min_stock', 'minimum_stock'])) ?? 0)),
       track_stock: !service,
