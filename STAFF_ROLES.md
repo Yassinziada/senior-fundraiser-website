@@ -67,7 +67,7 @@ tables and audit history. Do not delete enum values or supplier receipts.
 
 - Existing 22 unit tests and the Vite production build pass.
 - All seven migrations apply on embedded PostgreSQL (PGlite).
-- Eleven database scenario groups cover role provisioning, permission denial,
+- Twelve database scenario groups cover role provisioning, permission denial,
   existing sales, finance reports/reconciliation, list isolation, availability,
   partial receipts, retries, overreceipt rejection, immutable/audited receipts,
   and deactivation.

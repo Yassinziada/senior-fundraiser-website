@@ -14,6 +14,20 @@ export async function checkStaffRoles(pool) {
     assert.equal(profile.section_code, role === 'cashier' ? 'BAZAAR' : null);
   }
   checks.push('All five roles provision active profiles');
+  for (const section of ['BAZAAR', 'SNACKS']) {
+    const category = await rpc(pool, ids.product_manager, 'admin_save_category', [null, section, `Role category ${section}`, 1, true]);
+    await rpc(pool, ids.product_manager, 'admin_save_category', [category, section, `Renamed ${section}`, 2, true]);
+    await rpc(pool, ids.product_manager, 'admin_save_category', [category, section, `Renamed ${section}`, 2, false]);
+    const [inactive] = await as(pool, ids.product_manager, 'select name, active, sort_order from categories where id = $1', [category]);
+    assert.equal(inactive.name, `Renamed ${section}`); assert.equal(inactive.active, false); assert.equal(inactive.sort_order, 2);
+    await rpc(pool, ids.product_manager, 'admin_save_category', [category, section, `Renamed ${section}`, 2, true]);
+    const [active] = await as(pool, ids.product_manager, 'select active from categories where id = $1', [category]);
+    assert.equal(active.active, true);
+    for (const role of ['finance', 'supplier', 'cashier']) {
+      await assert.rejects(rpc(pool, ids[role], 'admin_save_category', [category, section, 'Forbidden', 2, false]), /cannot perform/i);
+    }
+  }
+  checks.push('Product manager can edit, deactivate and reactivate categories in both sections');
   const otherSupplier = await createUser(pool, { email: 'other-supplier@test.local', username: 'other-supplier', role: 'supplier' });
   const product = await rpc(pool, ids.product_manager, 'admin_save_product', [JSON.stringify({
     section_code: 'BAZAAR', name: 'Role test item', price: 15, cost: 8, starting_stock: 10,

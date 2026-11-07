@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useSettings } from '../../context/SettingsContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { useAsync } from '../../hooks/useAsync.js';
@@ -10,16 +10,27 @@ export default function CategoriesPage() {
   const toast = useToast();
   const { data, error, loading, reload } = useAsync(() => fetchCategories(null), []);
   const [drafts, setDrafts] = useState({}); // section -> name
+  const [formErrors, setFormErrors] = useState({});
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
 
   const save = async (c) => {
+    if (savingRef.current) return false;
+    savingRef.current = true;
+    setSaving(true);
+    setFormErrors((current) => ({ ...current, [c.section_code]: '' }));
     try {
       await saveCategory(c);
       toast.ok('Category saved');
-      reload({ silent: true });
+      await reload({ silent: true });
       return true;
     } catch (e) {
+      setFormErrors((current) => ({ ...current, [c.section_code]: e.message }));
       toast.error(e.message);
       return false;
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
     }
   };
 
@@ -52,7 +63,7 @@ export default function CategoriesPage() {
                   </thead>
                   <tbody>
                     {list.map((c) => (
-                      <CategoryRow key={c.id} c={c} onSave={save} />
+                      <CategoryRow key={c.id} c={c} onSave={save} disabled={saving} />
                     ))}
                     {list.length === 0 && (
                       <tr>
@@ -69,21 +80,32 @@ export default function CategoriesPage() {
                   onSubmit={async (e) => {
                     e.preventDefault();
                     const name = (drafts[s.code] ?? '').trim();
-                    if (!name) return;
+                    if (!name) {
+                      setFormErrors((current) => ({ ...current, [s.code]: 'Enter a category name, then press Add.' }));
+                      return;
+                    }
                     if (await save({ section_code: s.code, name, sort_order: list.length + 1 })) setDrafts((d) => ({ ...d, [s.code]: '' }));
                   }}
                 >
                   <input
                     className="input"
                     placeholder={`New ${s.name} category`}
+                    aria-label={`New ${s.name} category`}
+                    aria-describedby={formErrors[s.code] ? `category-error-${s.code}` : undefined}
+                    aria-invalid={!!formErrors[s.code]}
+                    disabled={saving}
                     value={drafts[s.code] ?? ''}
-                    onChange={(e) => setDrafts((d) => ({ ...d, [s.code]: e.target.value }))}
+                    onChange={(e) => {
+                      setDrafts((d) => ({ ...d, [s.code]: e.target.value }));
+                      setFormErrors((current) => ({ ...current, [s.code]: '' }));
+                    }}
                     maxLength={60}
                   />
-                  <button type="submit" className="btn primary">
-                    Add
+                  <button type="submit" className="btn primary" disabled={saving}>
+                    {saving ? 'Saving…' : 'Add'}
                   </button>
                 </form>
+                {formErrors[s.code] && <p id={`category-error-${s.code}`} className="notice bad" role="alert">{formErrors[s.code]}</p>}
               </div>
             );
           })}
@@ -93,17 +115,17 @@ export default function CategoriesPage() {
   );
 }
 
-function CategoryRow({ c, onSave }) {
+function CategoryRow({ c, onSave, disabled }) {
   const [name, setName] = useState(c.name);
   const [order, setOrder] = useState(String(c.sort_order));
   const dirty = name.trim() !== c.name || order !== String(c.sort_order);
   return (
     <tr className={c.active ? '' : 'dim'}>
       <td>
-        <input className="input" value={name} onChange={(e) => setName(e.target.value)} maxLength={60} />
+        <input className="input" aria-label={`Category name ${c.name}`} disabled={disabled} value={name} onChange={(e) => setName(e.target.value)} maxLength={60} />
       </td>
       <td className="num">
-        <input className="cell-in" inputMode="numeric" value={order} onChange={(e) => setOrder(e.target.value)} />
+        <input className="cell-in" aria-label={`Sort order for ${c.name}`} disabled={disabled} inputMode="numeric" value={order} onChange={(e) => setOrder(e.target.value)} />
       </td>
       <td>{c.active ? <Badge tone="ok">ACTIVE</Badge> : <Badge>INACTIVE</Badge>}</td>
       <td style={{ whiteSpace: 'nowrap' }}>
@@ -111,6 +133,7 @@ function CategoryRow({ c, onSave }) {
           <button
             type="button"
             className="btn sm primary"
+            disabled={disabled}
             onClick={() => onSave({ id: c.id, section_code: c.section_code, name: name.trim(), sort_order: parseInt(order, 10) || 0, active: c.active })}
           >
             Save
@@ -119,6 +142,7 @@ function CategoryRow({ c, onSave }) {
         <button
           type="button"
           className="btn sm"
+          disabled={disabled}
           onClick={() => onSave({ id: c.id, section_code: c.section_code, name: c.name, sort_order: c.sort_order, active: !c.active })}
         >
           {c.active ? 'Deactivate' : 'Activate'}

@@ -23,6 +23,7 @@ try {
   const orders=[{id:'00000000-0000-4000-8000-000000000010',title:'Weekly supplies',supplier_id:supplierId,
     items:[{id:1,product_id:1,product_name:'Water',quantity:5,available:false,received:0}]}];
   const calls=[];
+  const categories=[];
   await page.route('http://127.0.0.1:54329/**',async route=>{
    const url=new URL(route.request().url());
    const method=route.request().method();
@@ -37,6 +38,19 @@ try {
     else if(fn==='admin_sales_report') data=report;
     else if(fn==='admin_inventory_summary') data={low_stock:[],out_of_stock:[],units_in_stock:10,stock_cost_value:80,stock_retail_value:150};
     else if(fn==='admin_products_overview') data=[product];
+    else if(fn==='admin_save_category') {
+      const args=route.request().postDataJSON();
+      if(args.p_name==='Rejected category') return route.fulfill({status:403, contentType:'application/json',
+        headers:{'Access-Control-Allow-Origin':'*'},body:JSON.stringify({code:'42501', message:'Category update was refused', hint:'FORBIDDEN'})});
+      if(args.p_id===null) {
+        data=categories.length+1;
+        categories.push({id:data,section_code:args.p_section,name:args.p_name,sort_order:args.p_sort_order,active:args.p_active});
+      } else {
+        const category=categories.find(c=>c.id===args.p_id);
+        Object.assign(category,{name:args.p_name,sort_order:args.p_sort_order,active:args.p_active});
+        data=category.id;
+      }
+    }
     else if(fn==='supplier_set_available') orders[0].items[0].available=route.request().postDataJSON().p_available;
     else if(fn==='receive_supplier_item') orders[0].items[0].received+=route.request().postDataJSON().p_quantity;
     else if(fn==='admin_cash_summary') data=[];
@@ -46,6 +60,7 @@ try {
     else if(table==='app_settings') data=[{id:1,event_name:'Test fundraiser',timezone:'Africa/Cairo',currency_code:'EGP',locale:'en-EG'}];
     else if(table==='sections') data=[{code:'BAZAAR',name:'Bazaar',sort_order:0},{code:'SNACKS',name:'Snacks',sort_order:1}];
     else if(table==='products') data=[product];
+    else if(table==='categories') data=categories;
     else if(table==='supplier_orders') data=orders;
     else data=[];
     if(route.request().headers()['accept']?.includes('vnd.pgrst.object')) data=data[0]??null;
@@ -68,6 +83,28 @@ try {
   if(role==='product_manager') {
    await page.getByRole('heading',{name:'Products',exact:true}).waitFor();
    assert.equal(await page.getByRole('link',{name:'Users',exact:true}).count(),0);
+   await page.getByRole('link',{name:'Categories',exact:true}).click();
+   const bazaarCard=page.getByRole('heading',{name:'Bazaar',exact:true}).locator('..');
+   await bazaarCard.getByRole('button',{name:'Add',exact:true}).click();
+   await bazaarCard.getByRole('alert').filter({hasText:'Enter a category name'}).waitFor();
+   for(const section of ['Bazaar','Snacks']) {
+     const card=page.getByRole('heading',{name:section,exact:true}).locator('..');
+     await card.getByRole('textbox',{name:`New ${section} category`}).fill(`${section} accessories`);
+     await card.getByRole('button',{name:'Add',exact:true}).click();
+     const input=card.getByRole('textbox',{name:`Category name ${section} accessories`,exact:true});
+     await input.waitFor();
+     await input.fill(`${section} gifts`);
+     await card.getByRole('button',{name:'Save',exact:true}).click();
+     await card.getByRole('textbox',{name:`Category name ${section} gifts`,exact:true}).waitFor();
+     await card.getByRole('button',{name:'Deactivate',exact:true}).click();
+     await card.getByRole('button',{name:'Activate',exact:true}).waitFor();
+     await card.getByRole('button',{name:'Activate',exact:true}).click();
+     await card.getByRole('button',{name:'Deactivate',exact:true}).waitFor();
+   }
+   await bazaarCard.getByRole('textbox',{name:'New Bazaar category'}).fill('Rejected category');
+   await bazaarCard.getByRole('button',{name:'Add',exact:true}).click();
+   await bazaarCard.getByRole('alert').filter({hasText:'Category update was refused'}).waitFor();
+   console.log('PASS category empty-name validation, add, edit, activation and visible server errors');
    await page.getByRole('link',{name:'Supplier lists',exact:true}).click();
    await page.getByLabel('List title',{exact:true}).fill('New supplies');
    await page.getByLabel('Supplier',{exact:true}).selectOption(supplierId);
