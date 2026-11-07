@@ -94,7 +94,7 @@ try {
    await page.getByRole('link',{name:'Money',exact:true}).click();
    await page.getByLabel('Starting Cash',{exact:true}).fill('1000');
    await page.getByLabel('Starting Telda',{exact:true}).fill('100');
-   await page.getByLabel('Starting InstaPay',{exact:true}).fill('50');
+   assert.equal(await page.getByLabel('Starting InstaPay',{exact:true}).count(),0);
    await page.getByRole('checkbox').check();
    await page.getByRole('button',{name:'Start money tracking'}).click();
    await page.getByRole('heading',{name:'How the totals add up'}).waitFor();
@@ -105,18 +105,28 @@ try {
    await page.reload();
    await page.getByRole('button',{name:'Retry safely'}).click();
    await page.getByRole('status').filter({hasText:'Saved.'}).waitFor();
-   assert.equal(money.total,1140);assert.equal(money.expenses,10);
+   assert.equal(money.total,1090);assert.equal(money.expenses,10);
+   assert.deepEqual(await page.getByRole('combobox',{name:'Paid from',exact:true}).locator('option').allTextContents(),['Cash','Telda']);
    await page.getByLabel('Type',{exact:true}).selectOption('transfer');
+   assert.deepEqual(await page.getByRole('combobox',{name:'Transfer to',exact:true}).locator('option').allTextContents(),['Cash','Telda']);
    await page.getByLabel('Amount',{exact:true}).fill('100');
    await page.getByLabel('Description',{exact:true}).fill('Move money');
    await page.getByRole('button',{name:'Record transfer'}).click();
    await page.waitForFunction(()=>!document.body.textContent.includes('The last action is unconfirmed'));
-   assert.equal(money.total,1140);assert.equal(money.cash,890);assert.equal(money.telda,200);
+   assert.equal(money.total,1090);assert.equal(money.cash,890);assert.equal(money.telda,200);
    await page.setViewportSize({width:390,height:844});
    await page.screenshot({path:'/workspace/work/money-mobile.png',fullPage:true});
    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),'Money page fits mobile width');
    await page.setViewportSize({width:1280,height:720});
    console.log('PASS opening balances, expense lost-response recovery across refresh, transfer and combined total');
+  }
+  if(role==='cashier') {
+   await page.locator('.pcard', {has:page.locator('.pname',{hasText:'Water'})}).click();
+   await page.getByRole('button',{name:/CHECKOUT/}).click();
+   assert.equal(await page.getByRole('radio',{name:'InstaPay',exact:true}).count(),0);
+   assert.equal(await page.getByRole('radio').count(),2);
+   await page.getByRole('radio',{name:'Telda',exact:true}).click();
+   console.log('PASS cashier checkout offers Cash and Telda only');
   }
   if(role==='finance') {
    await page.getByRole('heading',{name:'Dashboard',exact:true}).waitFor();

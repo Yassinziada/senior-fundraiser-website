@@ -140,3 +140,11 @@ reflect recorded payments and should be reconciled with actual accounts.
   mocked local Supabase endpoints.
 - Authenticated end-to-end use of the real test Supabase project remains a manual
   staging check. No production migrations or merge have been performed.
+
+## Current payment options
+
+New checkout, stock payment, opening balance, expense and transfer forms offer
+Cash and Telda only. The InstaPay enum and stored history remain compatible with
+older records; nonzero historical amounts still appear in reports and totals.
+This is a frontend option change, with no database migration. Older clients/API
+remain backward compatible. Refresh devices to use the current payment choices.

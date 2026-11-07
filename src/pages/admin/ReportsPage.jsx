@@ -128,7 +128,7 @@ export default function ReportsPage() {
                   { ...m('revenue'), label: 'Revenue' },
                   { ...m('cash'), label: 'Cash' },
                   { ...m('telda'), label: 'Telda' },
-                  { ...m('instapay'), label: 'InstaPay' },
+                  ...(Number(t.instapay) !== 0 ? [{ ...m('instapay'), label: 'InstaPay (historical)' }] : []),
                   { ...m('cogs'), label: 'COGS (est.)' },
                   { ...m('gross_profit'), label: 'Gross profit (est.)' },
                   { key: 'voided_count', label: 'Voided', num: true },
@@ -147,7 +147,7 @@ export default function ReportsPage() {
                   { ...m('revenue'), label: 'Revenue' },
                   { ...m('cash'), label: 'Cash' },
                   { ...m('telda'), label: 'Telda' },
-                  { ...m('instapay'), label: 'InstaPay' },
+                  ...(Number(t.instapay) !== 0 ? [{ ...m('instapay'), label: 'InstaPay (historical)' }] : []),
                   { ...m('cogs'), label: 'COGS (est.)' },
                   { ...m('gross_profit'), label: 'Gross profit (est.)' },
                 ]}
@@ -205,7 +205,7 @@ export default function ReportsPage() {
                 { ...m('revenue'), label: 'Revenue' },
                 { ...m('cash'), label: 'Cash' },
                 { ...m('telda'), label: 'Telda' },
-                { ...m('instapay'), label: 'InstaPay' },
+                ...(Number(t.instapay) !== 0 ? [{ ...m('instapay'), label: 'InstaPay (historical)' }] : []),
                 { key: 'voided_count', label: 'Voided', num: true },
                 { ...m('voided_amount'), label: 'Voided amount' },
               ]}
@@ -222,7 +222,7 @@ export default function ReportsPage() {
 }
 
 function PaymentMatrix({ report, sections, section, money }) {
-  const methods = ['CASH', 'TELDA', 'INSTAPAY'];
+  const methods = ['CASH', 'TELDA', ...(report.by_payment.some(x => x.payment_method === 'INSTAPAY') ? ['INSTAPAY'] : [])];
   const secs = sections.filter((s) => !section || s.code === section);
   const cell = (sc, pm) => report.by_payment.find((x) => x.section_code === sc && x.payment_method === pm);
   const rows = methods.map((pm) => {
@@ -356,7 +356,7 @@ function CashReport({ range, section }) {
         mm('actual_cash', 'Actual counted'),
         { ...mm('difference', 'Difference'), render: (x) => <span className={x.difference < 0 ? 'bad-t' : x.difference > 0 ? 'warn-t' : 'ok-t'}>{money(x.difference)}</span> },
         mm('telda_sales', 'Telda'),
-        mm('instapay_sales', 'InstaPay'),
+        ...(data.some(x => Number(x.instapay_sales) !== 0) ? [mm('instapay_sales', 'InstaPay (historical)')] : []),
         { key: 'notes', label: 'Notes' },
         { key: 'recorded_at', label: 'Recorded', value: (x) => formatDateTime(x.recorded_at, dateOpts) },
       ]}

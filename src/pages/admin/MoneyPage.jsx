@@ -15,7 +15,7 @@ export default function MoneyPage() {
   const { data, error, loading, reload } = useAsync(async () => ({ summary: await moneySummary(), history: await moneyHistory() }), []);
   useRealtime(['transactions'], () => reload({ silent: true }));
   const action = useMoneyAction('finance');
-  const [opening, setOpening] = useState({ CASH: '', TELDA: '0', INSTAPAY: '0' });
+  const [opening, setOpening] = useState({ CASH: '', TELDA: '0' });
   const [kind, setKind] = useState('expense');
   const [account, setAccount] = useState('CASH');
   const [to, setTo] = useState('TELDA');
@@ -36,10 +36,10 @@ export default function MoneyPage() {
     if (!confirmed || disabled) return;
     const values = Object.values(opening).map(parseAmountInput);
     if (values.some(n => !Number.isFinite(n))) return;
-    submit({ fn: 'money_open', args: { p_key: crypto.randomUUID(), p_cash: centsToAmount(values[0]), p_telda: centsToAmount(values[1]), p_instapay: centsToAmount(values[2]) } });
+    submit({ fn: 'money_open', args: { p_key: crypto.randomUUID(), p_cash: centsToAmount(values[0]), p_telda: centsToAmount(values[1]), p_instapay: 0 } });
   };
   return <div className="page">
-    <div className="page-head"><div><h1>Money</h1><p>Cash, Telda and InstaPay together — with profit shown separately.</p></div><button className="btn" onClick={() => reload()}>Refresh</button></div>
+    <div className="page-head"><div><h1>Money</h1><p>Cash and Telda together — with profit shown separately.</p></div><button className="btn" onClick={() => reload()}>Refresh</button></div>
     <ErrorNotice error={error} onRetry={reload} />
     {action.error && <div className="notice bad" role="alert">{action.error}</div>}
     {message && <div className="notice ok" role="status">{message}</div>}
@@ -48,13 +48,14 @@ export default function MoneyPage() {
       <h2>Starting money</h2>
       <p>Enter the money you actually have in each account now. Tracking starts when you save. Earlier sales and stock purchases are already reflected in these balances and will not be counted again.</p>
       {isAdmin ? <form onSubmit={start}><fieldset disabled={disabled} style={{ border: 0 }}>
-        <div className="frow">{Object.entries(opening).map(([k, v]) => <label className="f" key={k}>{k === 'CASH' ? 'Starting Cash' : k === 'TELDA' ? 'Starting Telda' : 'Starting InstaPay'}<input className="input" type="number" min="0" step="0.01" required value={v} onChange={e => setOpening(o => ({ ...o, [k]: e.target.value }))} /></label>)}</div>
+        <div className="frow">{Object.entries(opening).map(([k, v]) => <label className="f" key={k}>{k === 'CASH' ? 'Starting Cash' : 'Starting Telda'}<input className="input" type="number" min="0" step="0.01" required value={v} onChange={e => setOpening(o => ({ ...o, [k]: e.target.value }))} /></label>)}</div>
         <label className="chk"><input type="checkbox" required checked={confirmed} onChange={e => setConfirmed(e.target.checked)} />These are the current balances. Record starting money once.</label>
         <button className="btn primary" disabled={!confirmed} type="submit">Start money tracking</button>
       </fieldset></form> : <p>Ask Admin to enter the starting money.</p>}
     </div> : summary && <>
       <p className="muted">Since {new Date(summary.started_at).toLocaleString()}. All sections combined. Refunds are subtracted from sales.</p>
-      <div className="kpis"><StatCard label="Total available money" value={money(summary.total)} /><StatCard label="Cash" value={money(summary.cash)} /><StatCard label="Telda" value={money(summary.telda)} /><StatCard label="InstaPay" value={money(summary.instapay)} /></div>
+      <div className="kpis"><StatCard label="Total available money" value={money(summary.total)} /><StatCard label="Cash" value={money(summary.cash)} /><StatCard label="Telda" value={money(summary.telda)} /></div>
+      {Number(summary.instapay) !== 0 && <div className="notice info">Historical InstaPay balance: {money(summary.instapay)}. This remains included in total money so existing funds are not lost.</div>}
       {[summary.cash, summary.telda, summary.instapay].some(n => n < 0) && <div className="notice warn">An account is negative after a refund. Reconcile its actual balance before recording more payments.</div>}
       <div className="kpis"><StatCard label="Total sales (after refunds)" value={money(summary.sales)} /><StatCard label="Gross profit" value={money(summary.gross_profit)} /><StatCard label="Net profit" value={money(summary.net_profit)} /></div>
       <div className="card"><h2>How the totals add up</h2>

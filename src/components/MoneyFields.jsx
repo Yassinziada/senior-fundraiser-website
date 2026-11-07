@@ -2,7 +2,7 @@ import { useSettings } from '../context/SettingsContext.jsx';
 import { centsToAmount, parseAmountInput } from '../utils/money.js';
 export function AccountSelect({ value, onChange, label = 'Paid from', disabled = false }) {
   return <label className="f">{label}<select aria-label={label} className="input" value={value} onChange={e => onChange(e.target.value)} disabled={disabled} required>
-    <option value="CASH">Cash</option><option value="TELDA">Telda</option><option value="INSTAPAY">InstaPay</option>
+    <option value="CASH">Cash</option><option value="TELDA">Telda</option>
   </select></label>;
 }
 export default function MoneyFields({ cost, setCost, account, setAccount, quantity, disabled = false }) {

@@ -73,7 +73,7 @@ export default function Dashboard({ pendingVoids }) {
           <div className="kpis">
             <StatCard label="Cash" value={money(t.cash)} />
             <StatCard label="Telda" value={money(t.telda)} />
-            <StatCard label="InstaPay" value={money(t.instapay)} />
+            {Number(t.instapay) !== 0 && <StatCard label="InstaPay (historical)" value={money(t.instapay)} />}
             <StatCard label="Voids / refunds" value={money(t.voided_amount)} sub={`${int(t.voided_count)} voided`} tone={t.voided_count ? 'warn' : undefined} />
           </div>
           <div className="sec-t">Profit (estimated from recorded unit costs)</div>
@@ -97,7 +97,7 @@ export default function Dashboard({ pendingVoids }) {
                 rows={[
                   { key: 'CASH', label: paymentLabel('CASH'), value: t.cash },
                   { key: 'TELDA', label: paymentLabel('TELDA'), value: t.telda },
-                  { key: 'INSTAPAY', label: paymentLabel('INSTAPAY'), value: t.instapay },
+                  ...(Number(t.instapay) !== 0 ? [{ key: 'INSTAPAY', label: paymentLabel('INSTAPAY'), value: t.instapay }] : []),
                 ]}
               />
             </div>

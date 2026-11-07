@@ -54,7 +54,7 @@ export default function CashHandoverPage() {
       { key: 'cash_refunds', label: 'Cash refunds (voids)' },
       { key: 'expected_cash', label: 'Expected physical cash' },
       { key: 'telda_sales', label: 'Telda' },
-      { key: 'instapay_sales', label: 'InstaPay' },
+      ...(rows.some(r => Number(r.instapay_sales) !== 0) ? [{ key: 'instapay_sales', label: 'InstaPay (historical)' }] : []),
       { key: 'actual', label: 'Actual counted', value: (r) => r.handover?.actual_cash ?? '' },
       { key: 'difference', label: 'Difference', value: (r) => r.handover?.difference ?? '' },
       { key: 'notes', label: 'Notes', value: (r) => r.handover?.notes ?? '' },
@@ -66,7 +66,7 @@ export default function CashHandoverPage() {
       <div className="page-head">
         <div>
           <h1>End-of-day cash handover</h1>
-          <p>Count each cashier&apos;s cash box and enter the amount. Telda and InstaPay are not part of the physical cash.</p>
+          <p>Count each cashier&apos;s cash box and enter the amount. Telda is not part of the physical cash.</p>
         </div>
         <div className="actions">
           <input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} aria-label="Business date" />
@@ -116,10 +116,7 @@ export default function CashHandoverPage() {
                     <td>Telda (not in cash box)</td>
                     <td>{money(all.telda_sales)}</td>
                   </tr>
-                  <tr>
-                    <td>InstaPay (not in cash box)</td>
-                    <td>{money(all.instapay_sales)}</td>
-                  </tr>
+                  {Number(all.instapay_sales) !== 0 && <tr><td>InstaPay (historical, not in cash box)</td><td>{money(all.instapay_sales)}</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -132,6 +129,7 @@ export default function CashHandoverPage() {
 }
 
 function HandoverTable({ rows, date, onSaved, totals }) {
+  const legacy = rows.some(r => Number(r.instapay_sales) !== 0);
   const { money } = useSettings();
   if (!rows.length) return <div className="empty">No sales or handovers for this section on {date}.</div>;
   return (
@@ -145,7 +143,7 @@ function HandoverTable({ rows, date, onSaved, totals }) {
             <th className="num">Cash refunds</th>
             <th className="num">Expected cash</th>
             <th className="num">Telda</th>
-            <th className="num">InstaPay</th>
+            {legacy && <th className="num">InstaPay (historical)</th>}
             <th>Actual counted</th>
             <th className="num">Difference</th>
             <th />
@@ -153,7 +151,7 @@ function HandoverTable({ rows, date, onSaved, totals }) {
         </thead>
         <tbody>
           {rows.map((r) => (
-            <HandoverRow key={`${r.section_code}:${r.cashier_id}`} r={r} date={date} onSaved={onSaved} />
+            <HandoverRow key={`${r.section_code}:${r.cashier_id}`} r={r} date={date} onSaved={onSaved} legacy={legacy} />
           ))}
         </tbody>
         <tfoot>
@@ -164,7 +162,7 @@ function HandoverTable({ rows, date, onSaved, totals }) {
             <td className="num">{money(totals.cash_refunds)}</td>
             <td className="num">{money(totals.expected_cash)}</td>
             <td className="num">{money(totals.telda_sales)}</td>
-            <td className="num">{money(totals.instapay_sales)}</td>
+            {legacy && <td className="num">{money(totals.instapay_sales)}</td>}
             <td>{money(totals.actual)}</td>
             <td className="num">{money(totals.difference)}</td>
             <td />
@@ -175,7 +173,7 @@ function HandoverTable({ rows, date, onSaved, totals }) {
   );
 }
 
-function HandoverRow({ r, date, onSaved }) {
+function HandoverRow({ r, date, onSaved, legacy }) {
   const { money } = useSettings();
   const toast = useToast();
   const [actual, setActual] = useState(r.handover ? String(r.handover.actual_cash) : '');
@@ -222,7 +220,7 @@ function HandoverRow({ r, date, onSaved }) {
         <b>{money(r.expected_cash)}</b>
       </td>
       <td className="num">{money(r.telda_sales)}</td>
-      <td className="num">{money(r.instapay_sales)}</td>
+      {legacy && <td className="num">{money(r.instapay_sales)}</td>}
       <td>
         <input className="cell-in" inputMode="decimal" value={actual} onChange={(e) => setActual(e.target.value)} placeholder="0.00" aria-label="Actual counted cash" />
         <input className="input small-in" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Note (optional)" maxLength={500} />
