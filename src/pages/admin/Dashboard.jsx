@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useSettings } from '../../context/SettingsContext.jsx';
+import { useAuth } from '../../context/AuthContext.jsx';
 import { useAsync } from '../../hooks/useAsync.js';
 import { useRealtime } from '../../hooks/useRealtime.js';
 import { salesReport, inventorySummary, fetchHandovers } from '../../services/admin.js';
@@ -10,6 +11,7 @@ import { int, pct, paymentLabel, sectionLabel } from '../../utils/format.js';
 import { toCents, centsToAmount } from '../../utils/money.js';
 
 export default function Dashboard({ pendingVoids }) {
+  const { isAdmin } = useAuth();
   const { money, tz, sections } = useSettings();
   const [section, setSection] = useState('');
   const [range, setRange] = useState(() => initialRange('today', tz));
@@ -78,7 +80,7 @@ export default function Dashboard({ pendingVoids }) {
           <div className="kpis">
             <StatCard estimate label="Cost of goods sold" value={money(t.cogs)} />
             <StatCard estimate label="Gross profit" value={money(t.gross_profit)} sub={`Margin ${pct(t.margin_pct)}`} />
-            <StatCard label="Pending voids" value={int(pendingVoids)} tone={pendingVoids ? 'warn' : undefined} />
+            {isAdmin && <StatCard label="Pending voids" value={int(pendingVoids)} tone={pendingVoids ? 'warn' : undefined} />}
             <StatCard
               label="Cash differences"
               value={money(cashDiff)}

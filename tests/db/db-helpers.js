@@ -21,14 +21,15 @@ function withDb(url, db) {
   return u.toString();
 }
 
-export async function createTestDatabase() {
+export async function createTestDatabase(dbName = DB_NAME) {
+  if (!/^pos_[a-z_]+test$/.test(dbName) && dbName !== DB_NAME) throw new Error('Use a disposable pos_*test database');
   const admin = new pg.Client({ connectionString: TEST_URL });
   await admin.connect();
-  await admin.query(`drop database if exists ${DB_NAME} with (force)`);
-  await admin.query(`create database ${DB_NAME}`);
+  await admin.query(`drop database if exists ${dbName} with (force)`);
+  await admin.query(`create database ${dbName}`);
   await admin.end();
 
-  const pool = new pg.Pool({ connectionString: withDb(TEST_URL, DB_NAME), max: 10 });
+  const pool = new pg.Pool({ connectionString: withDb(TEST_URL, dbName), max: 10 });
   const files = [
     join(here, 'supabase-stub.sql'),
     ...readdirSync(join(root, 'supabase', 'migrations')).sort().map((f) => join(root, 'supabase', 'migrations', f)),

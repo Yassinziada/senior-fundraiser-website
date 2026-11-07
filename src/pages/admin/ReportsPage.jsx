@@ -1,6 +1,8 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useSettings } from '../../context/SettingsContext.jsx';
+import { useAuth } from '../../context/AuthContext.jsx';
+import { canOpenPage } from '../../utils/roles.js';
 import { useAsync } from '../../hooks/useAsync.js';
 import { fetchHandovers, fetchTransactions, inventorySummary, productsOverview, salesReport } from '../../services/admin.js';
 import { SectionFilter, DateRangeFilter, initialRange } from '../../components/Filters.jsx';
@@ -68,6 +70,7 @@ function ReportTable({ title, rows, columns, filename, footer }) {
 }
 
 export default function ReportsPage() {
+  const { profile } = useAuth();
   const { money, tz, sections, dateOpts } = useSettings();
   const [tab, setTab] = useState('summary');
   const [section, setSection] = useState('');
@@ -86,7 +89,7 @@ export default function ReportsPage() {
           <h1>Reports</h1>
           <p>
             Revenue, COGS and profit use the price and cost recorded on each sale (historical values). Voided sales are excluded from revenue. Stock
-            movements have their own page: <Link to="/admin/stock">Stock log</Link>.
+            {canOpenPage(profile.role, 'stock') ? <>movements have their own page: <Link to="/admin/stock">Stock log</Link>.</> : 'movements are managed by the Product Manager.'}
           </p>
         </div>
       </div>

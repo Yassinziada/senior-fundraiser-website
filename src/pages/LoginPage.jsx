@@ -52,7 +52,7 @@ export default function LoginPage() {
         </div>
         {!online && <div className="notice bad" style={{ marginTop: 16 }}>No internet connection. Internet connection required.</div>}
         <label className="f" style={{ marginTop: 18 }}>
-          Username (cashier) or email (admin)
+          Username (cashier) or email (staff)
           <input
             className="input"
             value={loginId}

@@ -1,5 +1,7 @@
 # School Bazaar POS
 
+> Staff-role update: see [STAFF_ROLES.md](STAFF_ROLES.md) for the five-role permission matrix, supplier workflow, and migration instructions.
+
 An online point-of-sale system for a school event with two independent sales
 sections, **Bazaar** and **Snacks**. It runs in the browser on laptops, tablets
 and phones at the same time, and every device uses one central cloud database.

@@ -1,0 +1,5 @@
+{
+  "VITE_SUPABASE_URL": "https://vwddggtxsvtgfikkcyxh.supabase.co",
+  "VITE_SUPABASE_ANON_KEY": "sb_publishable_ZnOELSNX27MxLC8saR8jKw_zDk-yyqx",
+  "VITE_CASHIER_EMAIL_DOMAIN": "cashiers.school-pos.app"
+}

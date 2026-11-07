@@ -19,6 +19,8 @@ import UsersPage from './UsersPage.jsx';
 import AuditPage from './AuditPage.jsx';
 import ImportPage from './ImportPage.jsx';
 import SettingsPage from './SettingsPage.jsx';
+import SupplierOrdersPage from '../supplier/SupplierOrdersPage.jsx';
+import { ROLE_LABELS, canOpenPage, firstStaffPage } from '../../utils/roles.js';
 
 const NAV = [
   ['', 'Dashboard'],
@@ -34,6 +36,7 @@ const NAV = [
   ['audit', 'Audit log'],
   ['import', 'Import'],
   ['settings', 'Settings'],
+  ['suppliers', 'Supplier lists'],
 ];
 
 export default function AdminLayout() {
@@ -44,11 +47,11 @@ export default function AdminLayout() {
   const [pending, setPending] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
 
-  const refreshPending = useCallback(() => pendingVoidCount().then(setPending, () => {}), []);
+  const refreshPending = useCallback(() => { if (profile.role === 'admin') pendingVoidCount().then(setPending, () => {}); }, [profile.role]);
   useEffect(() => {
     refreshPending();
   }, [refreshPending]);
-  useRealtime(['void_requests'], refreshPending);
+  useRealtime(['void_requests'], refreshPending, { enabled: profile.role === 'admin' });
   useEffect(() => setMenuOpen(false), [location.pathname]);
 
   return (
@@ -60,11 +63,11 @@ export default function AdminLayout() {
         <div className="brand">
           <span className="logo">AD</span>
           <div>
-            Admin<small>{settings.event_name}</small>
+            {ROLE_LABELS[profile.role]}<small>{settings.event_name}</small>
           </div>
         </div>
         <nav className={`tabs admin-tabs ${menuOpen ? 'open' : ''}`}>
-          {NAV.map(([to, label]) => (
+          {NAV.filter(([to]) => canOpenPage(profile.role, to)).map(([to, label]) => (
             <NavLink key={to} to={`/admin${to ? `/${to}` : ''}`} end={to === ''} className={({ isActive }) => `tab ${isActive ? 'on' : ''}`}>
               {label}
               {to === 'voids' && pending > 0 && <span className="cnt">{pending}</span>}
@@ -75,7 +78,7 @@ export default function AdminLayout() {
           <span className={`pill ${online ? 'on' : 'off'}`}>{online ? 'Online' : 'Offline'}</span>
           <div className="u">
             {profile.full_name || profile.username}
-            <small>Admin</small>
+            <small>{ROLE_LABELS[profile.role]}</small>
           </div>
           <button type="button" className="btn-ghost" onClick={signOut}>
             Sign out
@@ -85,20 +88,21 @@ export default function AdminLayout() {
       <ConnectionBanner />
       <main className="main">
         <Routes>
-          <Route index element={<Dashboard pendingVoids={pending} />} />
-          <Route path="sell" element={<SellPage />} />
-          <Route path="sales" element={<SalesPage />} />
-          <Route path="voids" element={<VoidsPage onChange={refreshPending} />} />
-          <Route path="products" element={<ProductsPage />} />
-          <Route path="categories" element={<CategoriesPage />} />
-          <Route path="stock" element={<StockMovementsPage />} />
-          <Route path="cash" element={<CashHandoverPage />} />
-          <Route path="reports" element={<ReportsPage />} />
-          <Route path="users" element={<UsersPage />} />
-          <Route path="audit" element={<AuditPage />} />
-          <Route path="import" element={<ImportPage />} />
-          <Route path="settings" element={<SettingsPage />} />
-          <Route path="*" element={<Navigate to="/admin" replace />} />
+          <Route index element={canOpenPage(profile.role, '') ? <Dashboard pendingVoids={pending} /> : <Navigate to={firstStaffPage(profile.role)} replace />} />
+          <Route path="sell" element={canOpenPage(profile.role, 'sell') ? <SellPage /> : <Navigate to={firstStaffPage(profile.role)} replace />} />
+          <Route path="sales" element={canOpenPage(profile.role, 'sales') ? <SalesPage /> : <Navigate to={firstStaffPage(profile.role)} replace />} />
+          <Route path="voids" element={canOpenPage(profile.role, 'voids') ? <VoidsPage onChange={refreshPending} /> : <Navigate to={firstStaffPage(profile.role)} replace />} />
+          <Route path="products" element={canOpenPage(profile.role, 'products') ? <ProductsPage /> : <Navigate to={firstStaffPage(profile.role)} replace />} />
+          <Route path="categories" element={canOpenPage(profile.role, 'categories') ? <CategoriesPage /> : <Navigate to={firstStaffPage(profile.role)} replace />} />
+          <Route path="stock" element={canOpenPage(profile.role, 'stock') ? <StockMovementsPage /> : <Navigate to={firstStaffPage(profile.role)} replace />} />
+          <Route path="cash" element={canOpenPage(profile.role, 'cash') ? <CashHandoverPage /> : <Navigate to={firstStaffPage(profile.role)} replace />} />
+          <Route path="reports" element={canOpenPage(profile.role, 'reports') ? <ReportsPage /> : <Navigate to={firstStaffPage(profile.role)} replace />} />
+          <Route path="users" element={canOpenPage(profile.role, 'users') ? <UsersPage /> : <Navigate to={firstStaffPage(profile.role)} replace />} />
+          <Route path="audit" element={canOpenPage(profile.role, 'audit') ? <AuditPage /> : <Navigate to={firstStaffPage(profile.role)} replace />} />
+          <Route path="import" element={canOpenPage(profile.role, 'import') ? <ImportPage /> : <Navigate to={firstStaffPage(profile.role)} replace />} />
+          <Route path="settings" element={canOpenPage(profile.role, 'settings') ? <SettingsPage /> : <Navigate to={firstStaffPage(profile.role)} replace />} />
+          <Route path="suppliers" element={canOpenPage(profile.role, 'suppliers') ? <SupplierOrdersPage /> : <Navigate to={firstStaffPage(profile.role)} replace />} />
+          <Route path="*" element={<Navigate to={firstStaffPage(profile.role)} replace />} />
         </Routes>
       </main>
     </div>

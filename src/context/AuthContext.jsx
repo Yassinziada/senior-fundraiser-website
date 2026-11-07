@@ -29,7 +29,7 @@ export function AuthProvider({ children }) {
       return;
     }
     setProfile(data);
-    setStatus(data && data.active && (data.role === 'admin' || data.section_code) ? 'ready' : 'inactive');
+    setStatus(data && data.active && (data.role !== 'cashier' || data.section_code) ? 'ready' : 'inactive');
   }, []);
 
   useEffect(() => {

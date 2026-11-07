@@ -1,0 +1,102 @@
+// Local UI smoke checks with mocked Supabase responses. SQL authorization is
+// verified separately in tests/db/staff-roles.test.js. Never uses production.
+// Start Vite with VITE_SUPABASE_URL=http://127.0.0.1:54329 and
+// VITE_SUPABASE_ANON_KEY=test-public-key, then run this file with Playwright.
+import { chromium } from 'playwright';
+import assert from 'node:assert/strict';
+const base = process.env.TEST_APP_URL || 'http://127.0.0.1:5173';
+const browser = await chromium.launch({ headless: true, args: ['--no-sandbox'] });
+const product = {id: 1, name:'Water', section_code:'BAZAAR', category_id:null, price:15,cost:8,
+  stock:10, starting_stock:10, min_stock:2, track_stock:true, active:true};
+const supplierId='00000000-0000-4000-8000-000000000003';
+const userId='00000000-0000-4000-8000-000000000001';
+const totals = Object.fromEntries(['revenue','transactions','units','avg_transaction','cogs','gross_profit','margin_pct','cash','telda','instapay','voided_count','voided_amount'].map(k=>[k,0]));
+const report = {totals, ...Object.fromEntries(['by_section','by_payment','by_day','by_hour','by_product','by_category','by_cashier'].map(k=>[k,[]]))};
+const errors = [];
+try {
+ for (const role of ['admin','cashier','finance','product_manager','supplier']) {
+  const context=await browser.newContext();
+  const page=await context.newPage();
+  page.on('pageerror', e=>errors.push(`${role}: ${e.message}`));
+  const id=role==='supplier'?supplierId:userId;
+  const profile={id, username:'testuser',full_name:'Test User',role,active:true,section_code:role==='cashier'?'BAZAAR':null};
+  const orders=[{id:'00000000-0000-4000-8000-000000000010',title:'Weekly supplies',supplier_id:supplierId,
+    items:[{id:1,product_id:1,product_name:'Water',quantity:5,available:false,received:0}]}];
+  const calls=[];
+  await page.route('http://127.0.0.1:54329/**',async route=>{
+   const url=new URL(route.request().url());
+   const method=route.request().method();
+   let data=null;
+   if(url.pathname.includes('/auth/v1/token')) {
+    const token=[{alg:'HS256',typ:'JWT'},{sub:id,exp:Math.floor(Date.now()/1000)+3600,role:'authenticated'},{}].map(x=>Buffer.from(JSON.stringify(x)).toString('base64url')).join('.');
+    data={access_token:token,refresh_token:'test-refresh',expires_in:3600,token_type:'bearer',user:{id,email:'test@example.com',aud:'authenticated'}};
+   } else if(url.pathname.includes('/auth/v1/user')) data={id,email:'test@example.com'};
+   else if(url.pathname.includes('/rpc/')) {
+    const fn=url.pathname.split('/').at(-1); calls.push(fn);
+    if(fn==='public_app_info') data={event_name:'Test fundraiser'};
+    else if(fn==='admin_sales_report') data=report;
+    else if(fn==='admin_inventory_summary') data={low_stock:[],out_of_stock:[],units_in_stock:10,stock_cost_value:80,stock_retail_value:150};
+    else if(fn==='admin_products_overview') data=[product];
+    else if(fn==='supplier_set_available') orders[0].items[0].available=route.request().postDataJSON().p_available;
+    else if(fn==='receive_supplier_item') orders[0].items[0].received+=route.request().postDataJSON().p_quantity;
+    else if(fn==='admin_cash_summary') data=[];
+   } else {
+    const table=url.pathname.split('/').at(-1);
+    if(table==='profiles') data=url.searchParams.has('role')?[{id:supplierId,full_name:'Supplier One',username:'supplier1'}]:[profile];
+    else if(table==='app_settings') data=[{id:1,event_name:'Test fundraiser',timezone:'Africa/Cairo',currency_code:'EGP',locale:'en-EG'}];
+    else if(table==='sections') data=[{code:'BAZAAR',name:'Bazaar',sort_order:0},{code:'SNACKS',name:'Snacks',sort_order:1}];
+    else if(table==='products') data=[product];
+    else if(table==='supplier_orders') data=orders;
+    else data=[];
+    if(route.request().headers()['accept']?.includes('vnd.pgrst.object')) data=data[0]??null;
+   }
+   await route.fulfill({status:200,contentType:'application/json',headers:{'Access-Control-Allow-Origin':'*','Content-Range':'0-0/1'},body:method==='HEAD'?'':JSON.stringify(data)});
+  });
+  await page.goto(base);
+  await page.getByRole('textbox',{name:'Username (cashier) or email (staff)'}).fill('test@example.com');
+  await page.getByLabel('Password',{exact:true}).fill('testpassword123');
+  await page.getByRole('button',{name:/sign in/i}).click();
+  const expected=role==='cashier'?'/pos':role==='supplier'?'/supplier':role==='product_manager'?'/admin/products':'/admin';
+  await page.waitForURL(base+expected);
+  if(role==='finance') {
+   await page.getByRole('heading',{name:'Dashboard',exact:true}).waitFor();
+   assert.deepEqual(await page.locator('nav a').allTextContents(),['Dashboard','Cash handover','Reports']);
+   await page.goto(base+'/admin/users'); await page.waitForURL(base+'/admin');
+   await page.getByRole('link',{name:'Reports',exact:true}).click();
+   await page.getByRole('heading',{name:'Reports',exact:true}).waitFor();
+  }
+  if(role==='product_manager') {
+   await page.getByRole('heading',{name:'Products',exact:true}).waitFor();
+   assert.equal(await page.getByRole('link',{name:'Users',exact:true}).count(),0);
+   await page.getByRole('link',{name:'Supplier lists',exact:true}).click();
+   await page.getByLabel('List title',{exact:true}).fill('New supplies');
+   await page.getByLabel('Supplier',{exact:true}).selectOption(supplierId);
+   await page.getByLabel('Product',{exact:true}).selectOption('1');
+   await page.getByRole('button',{name:'Send list',exact:true}).click();
+   await page.waitForFunction(()=>!document.body.textContent.includes('An earlier action is unconfirmed'));
+   assert.ok(calls.includes('create_supplier_order'));
+   await page.getByRole('spinbutton',{name:'Received quantity for Water'}).fill('2');
+   await page.getByRole('button',{name:'Confirm received',exact:true}).click();
+   await page.getByRole('cell',{name:'2 / 5',exact:true}).waitFor();
+   assert.ok(calls.includes('receive_supplier_item'));
+   assert.equal(await page.getByRole('spinbutton',{name:'Received quantity for Water'}).inputValue(),'');
+  }
+  if(role==='supplier') {
+   await page.getByRole('checkbox',{name:'Can supply Water'}).click();
+   await page.waitForFunction(()=>document.querySelector('input[type=checkbox]')?.checked);
+   assert.ok(calls.includes('supplier_set_available'));
+   assert.equal(await page.getByRole('button',{name:'Confirm received',exact:true}).count(),0);
+   assert.equal(await page.getByRole('heading',{name:'New supplier list'}).count(),0);
+   await page.goto(base+'/admin/reports');await page.waitForURL(base+'/supplier');
+  }
+  if(role==='admin') {
+   await page.getByRole('link',{name:'Users',exact:true}).click();
+   await page.getByRole('button',{name:'Create user'}).click();
+   await page.getByLabel('Role',{exact:true}).waitFor();
+   assert.deepEqual(await page.getByLabel('Role',{exact:true}).locator('option').allTextContents(),['Admin','Cashier','Finance','Product Manager','Supplier']);
+  }
+  console.log('PASS browser',role);
+  await context.close();
+ }
+ assert.deepEqual(errors,[]);
+} finally {await browser.close();}

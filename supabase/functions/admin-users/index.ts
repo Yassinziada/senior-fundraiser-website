@@ -121,7 +121,8 @@ Deno.serve(async (req) => {
   if (body.action === 'create_user') {
     const username = String(body.username ?? '').trim().toLowerCase();
     const fullName = String(body.full_name ?? '').trim().slice(0, 80);
-    const role = body.role === 'admin' ? 'admin' : 'cashier';
+    const role = String(body.role ?? 'cashier');
+    if (!['admin', 'cashier', 'finance', 'product_manager', 'supplier'].includes(role)) return json(400, { error: 'Invalid role.' });
     const section = role === 'cashier' ? String(body.section ?? '') : null;
     const email = String(body.email ?? '').trim().toLowerCase();
     const pin = String(body.pin ?? '');
@@ -129,7 +130,7 @@ Deno.serve(async (req) => {
     if (!USERNAME_RE.test(username)) return json(400, { error: 'Username: 2–40 characters, lowercase letters, digits, dot, dash or underscore.' });
     if (!EMAIL_RE.test(email)) return json(400, { error: 'Invalid login email.' });
     if (!validSecret(role, pin)) {
-      return json(400, { error: role === 'cashier' ? 'PIN must be 6 to 12 digits.' : 'Admin password must be at least 10 characters.' });
+      return json(400, { error: role === 'cashier' ? 'PIN must be 6 to 12 digits.' : 'Password must be 10 to 72 characters.' });
     }
     try {
       if (role === 'cashier' && !(await one(`sections?code=eq.${encodeURIComponent(section!)}&select=code`))) {
