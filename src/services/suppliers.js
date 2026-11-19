@@ -9,6 +9,12 @@ export const supplierAccounts = () => run(supabase.from('profiles')
 export const createSupplierOrder = ({ key, supplier, title, items }) => rpc('create_supplier_order', {
   p_id: key, p_supplier: supplier, p_title: title, p_items: items,
 });
+export const addSupplierOrderItem = ({ key, order, product, quantity }) => rpc('add_supplier_order_item', {
+  p_key: key, p_order: order, p_product: product, p_quantity: quantity,
+});
+export const removeSupplierOrderItem = ({ order, item }) => rpc('remove_supplier_order_item', {
+  p_order: order, p_item: item,
+});
 export const confirmSupplierPurchase = ({ item, quantity }) => rpc('supplier_confirm_purchase', {
   p_item: item, p_quantity: quantity,
 });

@@ -3,7 +3,7 @@ import { useAuth } from '../../context/AuthContext.jsx';
 import { useAsync } from '../../hooks/useAsync.js';
 import { useRealtime } from '../../hooks/useRealtime.js';
 import { productsOverview } from '../../services/admin.js';
-import { supplierOrders, supplierAccounts, createSupplierOrder, confirmSupplierPurchase, confirmSupplierDelivery, receiveSupplierItem } from '../../services/suppliers.js';
+import { supplierOrders, supplierAccounts, createSupplierOrder, addSupplierOrderItem, removeSupplierOrderItem, confirmSupplierPurchase, confirmSupplierDelivery, receiveSupplierItem } from '../../services/suppliers.js';
 import { ErrorNotice, Spinner } from '../../components/ui.jsx';
 import MoneyFields from '../../components/MoneyFields.jsx';
 import { parseAmountInput, centsToAmount } from '../../utils/money.js';
@@ -39,6 +39,8 @@ export default function SupplierOrdersPage() {
       pendingRef.current = action;
       setPending(action);
       if (action.type === 'create') await createSupplierOrder(action);
+      else if (action.type === 'add') await addSupplierOrderItem(action);
+      else if (action.type === 'remove') await removeSupplierOrderItem(action);
       else if (action.type === 'purchase') await confirmSupplierPurchase(action);
       else if (action.type === 'delivery') await confirmSupplierDelivery(action);
       else await receiveSupplierItem(action);
@@ -67,6 +69,10 @@ export default function SupplierOrdersPage() {
   const confirm = (type, item, quantity, payment = {}) => {
     if (pendingRef.current || busyRef.current) return;
     return send({ type, key: crypto.randomUUID(), item: item.id, product: item.product_id, quantity, ...payment });
+  };
+  const editOrder = (action) => {
+    if (pendingRef.current || busyRef.current) return;
+    return send(action);
   };
   const products = (options?.products ?? []).filter((p) => p.active && p.track_stock);
   return <div className="page">
@@ -110,8 +116,14 @@ export default function SupplierOrdersPage() {
       data.map((order) => <div className="card" key={order.id} style={{ marginTop: 16 }}>
         <h2>{order.title}</h2>
         {manager && <p className="muted">Supplier: {options?.suppliers?.find((s) => s.id === order.supplier_id)?.full_name || options?.suppliers?.find((s) => s.id === order.supplier_id)?.username || 'Inactive supplier'}</p>}
+        {manager && <AddPublishedItemForm
+          products={products.filter((product) => !order.items.some((item) => item.product_id === product.id))}
+          disabled={busy || !!pending || order.items.length >= 200}
+          onAdd={(product, quantity) => editOrder({ type: 'add', key: crypto.randomUUID(), order: order.id, product, quantity })}
+        />}
+        {order.items.length === 0 && <p className="muted">This list has no products.</p>}
         <div className="table-wrap"><table className="tbl">
-          <thead><tr><th>Product</th><th>Requested</th><th>Purchased</th><th>Delivered</th><th>Received</th>{manager && <th>Confirm receipt</th>}</tr></thead>
+          <thead><tr><th>Product</th><th>Requested</th><th>Purchased</th><th>Delivered</th><th>Received</th>{manager && <><th>Confirm receipt</th><th>List actions</th></>}</tr></thead>
           <tbody>{[...order.items].sort((a, b) => a.id - b.id).map((item) => <tr key={item.id}>
             <td>{item.product_name}</td><td>{item.quantity}</td>
             <td>{manager ? <ProgressQuantity value={item.purchased} confirmed={item.purchased_at} /> :
@@ -122,10 +134,44 @@ export default function SupplierOrdersPage() {
             {manager && <td><ReceiveForm item={item} disabled={busy || !!pending} onReceive={(quantity, payment) => {
               return confirm('receive', item, quantity, payment);
             }} /></td>}
+            {manager && <td>{item.purchased > 0 ? <small className="muted">Purchase recorded</small> :
+              <button className="btn sm" type="button" disabled={busy || !!pending}
+                aria-label={`Remove ${item.product_name}`}
+                onClick={() => {
+                  if (window.confirm(`Remove ${item.product_name} from "${order.title}"?`)) {
+                    editOrder({ type: 'remove', order: order.id, item: item.id });
+                  }
+                }}>Remove</button>}</td>}
           </tr>)}</tbody>
         </table></div>
       </div>)}
   </div>;
+}
+
+function AddPublishedItemForm({ products, disabled, onAdd }) {
+  const [product, setProduct] = useState('');
+  const [quantity, setQuantity] = useState('1');
+  const selectedProduct = products.find((option) => String(option.id) === product);
+  return <form className="frow" onSubmit={async (e) => {
+    e.preventDefault();
+    if (!disabled && selectedProduct && await onAdd(selectedProduct.id, Number(quantity))) {
+      setProduct('');
+      setQuantity('1');
+    }
+  }}>
+    <label className="f">Product to add
+      <select className="input" required disabled={disabled || products.length === 0}
+        value={selectedProduct ? product : ''} onChange={(e) => setProduct(e.target.value)}>
+        <option value="">Choose product</option>
+        {products.map((option) => <option key={option.id} value={option.id}>{option.name} ({option.section_code})</option>)}
+      </select>
+    </label>
+    <label className="f">Quantity
+      <input className="input" type="number" required min="1" max="100000" step="1"
+        disabled={disabled || !selectedProduct} value={quantity} onChange={(e) => setQuantity(e.target.value)} />
+    </label>
+    <button className="btn sm" type="submit" disabled={disabled || !selectedProduct}>Add to list</button>
+  </form>;
 }
 
 function ReceiveForm({ item, disabled, onReceive }) {
